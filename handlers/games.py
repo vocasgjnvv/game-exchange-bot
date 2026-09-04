@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
-from database.db import get_user, get_or_create_game, create_offer, get_user_offers
+from database.db import get_user, get_or_create_game, create_offer, get_user_offers, delete_offer
 from keyboards.keyboards import (
     platform_keyboard,
     format_keyboard,
