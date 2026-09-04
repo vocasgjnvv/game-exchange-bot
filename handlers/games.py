@@ -1,162 +1,223 @@
 from aiogram import Router, F
-from aiogram.types import Message
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.types import Message
+
 from database.db import get_user
 from keyboards.keyboards import (
-    main_menu_keyboard,
     platform_keyboard,
     format_keyboard,
     condition_keyboard,
 )
+
 router = Router()
+
+
 class AddGameState(StatesGroup):
     waiting_for_title = State()
     waiting_for_platform = State()
     waiting_for_format = State()
     waiting_for_condition = State()
+    waiting_for_region = State()
+    waiting_for_description = State()
+
+
 @router.message(F.text == "➕ Добавить игру")
 async def add_game_start(message: Message, state: FSMContext):
-    user = message.from_user
-    if user is None:
-        return
-    db_user = get_user(user.id)
-    if not db_user:
-        await message.answer(
-            "❌ Профиль не найден.\n\n"
-            "Нажмите /start."
-        )
-        return
+    await state.clear()
     await state.set_state(AddGameState.waiting_for_title)
+
     await message.answer(
-        "➕ <b>Добавление игры</b>\n\n"
-        "Напишите название игры.\n"
-        "Например: <b>Red Dead Redemption 2</b>"
+        "🎮 <b>Добавление игры</b>\n\n"
+        "Напиши название игры.\n\n"
+        "Например: <i>God of War</i>",
     )
+
+
 @router.message(AddGameState.waiting_for_title)
 async def add_game_title(message: Message, state: FSMContext):
-    title = (message.text or "").strip()
-    if not title:
-        await message.answer("❌ Напишите название игры текстом.")
-        return
+    title = message.text.strip()
+
     if len(title) < 2:
         await message.answer("❌ Название слишком короткое.")
         return
+
     if len(title) > 100:
-        await message.answer(
-            "❌ Название слишком длинное. Максимум 100 символов."
-        )
+        await message.answer("❌ Название слишком длинное.")
         return
+
     await state.update_data(title=title)
     await state.set_state(AddGameState.waiting_for_platform)
+
     await message.answer(
-        f"🎮 Игра: <b>{title}</b>\n\n"
-        "Выберите платформу:",
-        reply_markup=platform_keyboard(),
+        "🎮 На какой платформе игра?",
+        reply_markup=platform_keyboard()
     )
+
+
 @router.message(AddGameState.waiting_for_platform)
 async def add_game_platform(message: Message, state: FSMContext):
-    platform = (message.text or "").strip()
-    allowed_platforms = {
-        "🎮 PS3",
-        "🎮 PS4",
-        "🎮 PS5",
-        "🟩 Xbox One",
-        "🟩 Xbox Series X/S",
-        "💻 PC",
+    platform_map = {
+        "🎮 PS3": "PS3",
+        "🎮 PS4": "PS4",
+        "🎮 PS5": "PS5",
+        "🟩 Xbox One": "Xbox One",
+        "🟩 Xbox Series X/S": "Xbox Series X/S",
+        "💻 PC": "PC",
     }
-    if platform not in allowed_platforms:
-        await message.answer(
-            "❌ Выберите платформу кнопкой ниже.",
-            reply_markup=platform_keyboard(),
-        )
+
+    platform = platform_map.get(message.text)
+
+    if not platform:
+        await message.answer("❌ Выбери платформу кнопкой ниже.")
         return
-    data = await state.get_data()
-    title = data.get("title")
+
     await state.update_data(platform=platform)
     await state.set_state(AddGameState.waiting_for_format)
+
     await message.answer(
-        f"🎮 Игра: <b>{title}</b>\n"
-        f"🕹 Платформа: <b>{platform}</b>\n\n"
-        "Выберите формат игры:",
-        reply_markup=format_keyboard(),
+        "📦 В каком формате у тебя игра?",
+        reply_markup=format_keyboard()
     )
+
+
 @router.message(AddGameState.waiting_for_format)
 async def add_game_format(message: Message, state: FSMContext):
-    format_type = (message.text or "").strip()
-    allowed_formats = {
-        "💿 Физический диск",
-        "🔑 Игровой ключ",
-    }
-    if format_type not in allowed_formats:
-        await message.answer(
-            "❌ Выберите формат кнопкой ниже.",
-            reply_markup=format_keyboard(),
+    if message.text == "💿 Физический диск":
+        await state.update_data(
+            format="physical",
+            key_region=None
         )
-        return
-    data = await state.get_data()
-    title = data.get("title")
-    platform = data.get("platform")
-    await state.update_data(format=format_type)
-    # Физический диск
-    if format_type == "💿 Физический диск":
+
         await state.set_state(AddGameState.waiting_for_condition)
+
         await message.answer(
-            f"🎮 Игра: <b>{title}</b>\n"
-            f"🕹 Платформа: <b>{platform}</b>\n"
-            f"📦 Формат: <b>{format_type}</b>\n\n"
-            "💿 Выберите состояние диска:",
-            reply_markup=condition_keyboard(),
+            "💿 В каком состоянии диск?",
+            reply_markup=condition_keyboard()
         )
         return
-    # Игровой ключ
+
+    if message.text == "🔑 Игровой ключ":
+        await state.update_data(
+            format="key",
+            condition=None
+        )
+
+        await state.set_state(AddGameState.waiting_for_region)
+
+        await message.answer(
+            "🌍 Укажи регион активации ключа.\n\n"
+            "Например:\n"
+            "🇷🇺 RU\n"
+            "🇪🇺 EU\n"
+            "🌎 Global"
+        )
+        return
+
     await message.answer(
-        f"🎮 Игра: <b>{title}</b>\n"
-        f"🕹 Платформа: <b>{platform}</b>\n"
-        f"📦 Формат: <b>{format_type}</b>\n\n"
-        "🌍 Следующим шагом выберем регион активации ключа.\n\n"
-        "🔒 Сам ключ вводить не нужно — он никогда не публикуется."
+        "❌ Выбери формат кнопкой ниже.",
+        reply_markup=format_keyboard()
     )
+
+
 @router.message(AddGameState.waiting_for_condition)
 async def add_game_condition(message: Message, state: FSMContext):
-    condition = (message.text or "").strip()
-    allowed_conditions = {
-        "🟢 Отличное",
-        "🟡 Хорошее",
-        "🟠 Есть следы использования",
+    condition_map = {
+        "🟢 Отличное": "Отличное",
+        "🟡 Хорошее": "Хорошее",
+        "🟠 Есть следы использования": "Есть следы использования",
     }
-    if condition not in allowed_conditions:
+
+    condition = condition_map.get(message.text)
+
+    if not condition:
         await message.answer(
-            "❌ Выберите состояние кнопкой ниже.",
-            reply_markup=condition_keyboard(),
+            "❌ Выбери состояние кнопкой ниже.",
+            reply_markup=condition_keyboard()
         )
         return
-    data = await state.get_data()
-    title = data.get("title")
-    platform = data.get("platform")
-    format_type = data.get("format")
+
     await state.update_data(condition=condition)
+
+    await state.set_state(AddGameState.waiting_for_description)
+
     await message.answer(
-        f"🎮 Игра: <b>{title}</b>\n"
-        f"🕹 Платформа: <b>{platform}</b>\n"
-        f"📦 Формат: <b>{format_type}</b>\n"
-        f"💿 Состояние: <b>{condition}</b>\n\n"
-        "📝 Следующим шагом добавим описание объявления."
+        "📝 Теперь напиши краткое описание игры.\n\n"
+        "Например:\n"
+        "<i>Диск в хорошем состоянии, всё работает.</i>"
     )
-@router.message(F.text == "🎮 Мои игры")
-async def my_games_handler(message: Message):
-    user = message.from_user
-    if user is None:
+
+
+@router.message(AddGameState.waiting_for_region)
+async def add_game_region(message: Message, state: FSMContext):
+    region = message.text.strip()
+
+    if len(region) < 2:
+        await message.answer("❌ Укажи корректный регион активации.")
         return
-    db_user = get_user(user.id)
-    if not db_user:
+
+    if len(region) > 50:
+        await message.answer("❌ Название региона слишком длинное.")
+        return
+
+    await state.update_data(key_region=region)
+
+    await state.set_state(AddGameState.waiting_for_description)
+
+    await message.answer(
+        "📝 Теперь напиши краткое описание игры.\n\n"
+        "Например:\n"
+        "<i>Ключ новый, регион EU.</i>\n\n"
+        "⚠️ Сам ключ отправлять не нужно."
+    )
+
+
+@router.message(AddGameState.waiting_for_description)
+async def add_game_description(message: Message, state: FSMContext):
+    description = message.text.strip()
+
+    if len(description) < 3:
+        await message.answer("❌ Описание слишком короткое.")
+        return
+
+    if len(description) > 1000:
+        await message.answer("❌ Описание слишком длинное.")
+        return
+
+    data = await state.get_data()
+
+    user = get_user(message.from_user.id)
+
+    if not user:
+        await state.clear()
         await message.answer(
-            "❌ Профиль не найден.\n\n"
-            "Нажмите /start."
+            "❌ Профиль не найден. Выполни /start."
         )
         return
+
+    city = user["city"]
+
+    if not city:
+        await state.clear()
+        await message.answer(
+            "❌ Сначала укажи город в профиле."
+        )
+        return
+
+    await state.update_data(description=description)
+
+    data = await state.get_data()
+
     await message.answer(
-        "🎮 <b>Мои игры</b>\n\n"
-        "Здесь будут отображаться ваши игры.",
-        reply_markup=main_menu_keyboard(),
+        "✅ <b>Данные игры собраны!</b>\n\n"
+        f"🎮 Игра: <b>{data['title']}</b>\n"
+        f"🕹 Платформа: <b>{data['platform']}</b>\n"
+        f"📦 Формат: <b>{'Физический диск' if data['format'] == 'physical' else 'Игровой ключ'}</b>\n"
+        f"🌍 Регион: <b>{data.get('key_region') or '—'}</b>\n"
+        f"💿 Состояние: <b>{data.get('condition') or '—'}</b>\n"
+        f"📍 Город: <b>{city}</b>\n"
+        f"📝 Описание: <b>{description}</b>\n\n"
+        "Следующий шаг — сохранить объявление в базе."
     )
+
+    await state.clear()
