@@ -38,3 +38,21 @@ def main_menu_keyboard():
         ],
         resize_keyboard=True
     )
+def platform_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="🎮 PS3"),
+                KeyboardButton(text="🎮 PS4")
+            ],
+            [
+                KeyboardButton(text="🎮 PS5"),
+                KeyboardButton(text="🟩 Xbox One")
+            ],
+            [
+                KeyboardButton(text="🟩 Xbox Series X/S"),
+                KeyboardButton(text="💻 PC")
+            ]
+        ],
+        resize_keyboard=True
+    )
