@@ -345,6 +345,49 @@ def get_user_offers(user_id: int):
             (user_id,)
         ).fetchall()
         
+def search_offers(
+    title: str = "",
+    platform: str = "",
+    city: str = "",
+    user_id: int = 0
+):
+    with get_connection() as conn:
+        query = """
+            SELECT
+                offers.id,
+                games.title,
+                offers.platform,
+                offers.format,
+                offers.condition,
+                offers.key_region,
+                offers.description,
+                offers.city,
+                users.telegram_id
+            FROM offers
+            JOIN games ON games.id = offers.game_id
+            JOIN users ON users.id = offers.user_id
+            WHERE offers.status = 'active'
+              AND offers.user_id != ?
+        """
+
+        params = [user_id]
+
+        if title:
+            query += " AND games.title LIKE ?"
+            params.append(f"%{title}%")
+
+        if platform:
+            query += " AND offers.platform = ?"
+            params.append(platform)
+
+        if city:
+            query += " AND offers.city LIKE ?"
+            params.append(f"%{city}%")
+
+        query += " ORDER BY offers.created_at DESC"
+
+        return conn.execute(query, params).fetchall()
+        
 def delete_offer(offer_id: int, user_id: int) -> bool:
     with get_connection() as conn:
         cursor = conn.execute(
