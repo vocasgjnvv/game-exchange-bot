@@ -12,6 +12,26 @@ from keyboards.keyboards import (
 
 router = Router()
 
+@router.message(F.text == "🎮 Мои игры")
+async def my_games(message: Message):
+    user = get_user(message.from_user.id)
+
+    if not user:
+        await message.answer(
+            "❌ Профиль не найден. Выполни /start."
+        )
+        return
+
+    offers = get_user_offers(user["id"])
+
+    if not offers:
+        await message.answer(
+            "🎮 <b>Мои игры</b>\n\n"
+            "У тебя пока нет добавленных игр.\n\n"
+            "Нажми «➕ Добавить игру», чтобы добавить первую."
+        )
+        return
+
 
 class AddGameState(StatesGroup):
     waiting_for_title = State()
