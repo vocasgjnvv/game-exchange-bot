@@ -339,7 +339,7 @@ def get_user_offers(user_id: int):
                 offers.status
             FROM offers
             JOIN games ON games.id = offers.game_id
-            WHERE offers.user_id = ?
+            WHERE offers.user_id = ? AND offers.status = 'active'
             ORDER BY offers.created_at DESC
             """,
             (user_id,)
