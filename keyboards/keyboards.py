@@ -38,6 +38,8 @@ def main_menu_keyboard():
         ],
         resize_keyboard=True
     )
+
+
 def platform_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -52,6 +54,20 @@ def platform_keyboard():
             [
                 KeyboardButton(text="🟩 Xbox Series X/S"),
                 KeyboardButton(text="💻 PC")
+            ]
+        ],
+        resize_keyboard=True
+    )
+
+
+def format_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="💿 Физический диск")
+            ],
+            [
+                KeyboardButton(text="🔑 Игровой ключ")
             ]
         ],
         resize_keyboard=True
