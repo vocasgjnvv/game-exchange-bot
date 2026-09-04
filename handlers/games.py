@@ -180,6 +180,25 @@ async def add_game_platform(message: Message, state: FSMContext):
 @router.message(AddGameState.waiting_for_format)
 async def add_game_format(message: Message, state: FSMContext):
     if message.text == "💿 Физический диск":
+        await state.update_data(
+            format="physical",
+            key_region=None
+        )
+
+        data = await state.get_data()
+        save_game_draft(
+            message.from_user.id,
+            data,
+            "waiting_for_condition"
+        )
+
+        await state.set_state(AddGameState.waiting_for_condition)
+
+        await message.answer(
+            "💿 В каком состоянии диск?",
+            reply_markup=condition_keyboard()
+        )
+        return
 await state.update_data(
     format="physical",
     key_region=None
