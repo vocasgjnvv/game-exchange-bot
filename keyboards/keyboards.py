@@ -72,3 +72,19 @@ def format_keyboard():
         ],
         resize_keyboard=True
     )
+    
+def condition_keyboard():
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="🟢 Отличное")
+            ],
+            [
+                KeyboardButton(text="🟡 Хорошее")
+            ],
+            [
+                KeyboardButton(text="🟠 Есть следы использования")
+            ]
+        ],
+        resize_keyboard=True
+    )
