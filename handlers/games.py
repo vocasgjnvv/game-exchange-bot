@@ -206,6 +206,13 @@ async def add_game_format(message: Message, state: FSMContext):
             condition=None
         )
 
+        data = await state.get_data()
+        save_game_draft(
+            message.from_user.id,
+            data,
+            "waiting_for_region"
+        )
+
         await state.set_state(AddGameState.waiting_for_region)
 
         await message.answer(
