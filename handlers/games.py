@@ -125,8 +125,15 @@ async def add_game_title(message: Message, state: FSMContext):
         return
 
     await state.update_data(title=title)
-    await state.set_state(AddGameState.waiting_for_platform)
 
+data = await state.get_data()
+save_game_draft(
+    message.from_user.id,
+    data,
+    "waiting_for_platform"
+)
+
+await state.set_state(AddGameState.waiting_for_platform)
     await message.answer(
         "🎮 На какой платформе игра?",
         reply_markup=platform_keyboard()
