@@ -3,7 +3,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
-from database.db import get_user
+from database.db import get_user, get_or_create_game, create_offer
 from keyboards.keyboards import (
     platform_keyboard,
     format_keyboard,
@@ -30,7 +30,7 @@ async def add_game_start(message: Message, state: FSMContext):
     await message.answer(
         "🎮 <b>Добавление игры</b>\n\n"
         "Напиши название игры.\n\n"
-        "Например: <i>God of War</i>",
+        "Например: <i>God of War</i>"
     )
 
 
@@ -138,7 +138,6 @@ async def add_game_condition(message: Message, state: FSMContext):
         return
 
     await state.update_data(condition=condition)
-
     await state.set_state(AddGameState.waiting_for_description)
 
     await message.answer(
@@ -161,7 +160,6 @@ async def add_game_region(message: Message, state: FSMContext):
         return
 
     await state.update_data(key_region=region)
-
     await state.set_state(AddGameState.waiting_for_description)
 
     await message.answer(
@@ -204,12 +202,36 @@ async def add_game_description(message: Message, state: FSMContext):
         )
         return
 
-    await state.update_data(description=description)
+    try:
+        game_id = get_or_create_game(
+            title=data["title"],
+            platform=data["platform"]
+        )
 
-    data = await state.get_data()
+        offer_id = create_offer(
+            user_id=message.from_user.id,
+            game_id=game_id,
+            condition=data.get("condition"),
+            key_region=data.get("key_region"),
+            description=description,
+            city=city
+        )
+
+    except Exception as e:
+        print(f"Ошибка сохранения игры: {e}")
+
+        await state.clear()
+
+        await message.answer(
+            "❌ Не удалось сохранить игру.\n"
+            "Попробуй ещё раз."
+        )
+        return
+
+    await state.clear()
 
     await message.answer(
-        "✅ <b>Данные игры собраны!</b>\n\n"
+        "✅ <b>Игра успешно добавлена!</b>\n\n"
         f"🎮 Игра: <b>{data['title']}</b>\n"
         f"🕹 Платформа: <b>{data['platform']}</b>\n"
         f"📦 Формат: <b>{'Физический диск' if data['format'] == 'physical' else 'Игровой ключ'}</b>\n"
@@ -217,7 +239,5 @@ async def add_game_description(message: Message, state: FSMContext):
         f"💿 Состояние: <b>{data.get('condition') or '—'}</b>\n"
         f"📍 Город: <b>{city}</b>\n"
         f"📝 Описание: <b>{description}</b>\n\n"
-        "Следующий шаг — сохранить объявление в базе."
+        "🎉 Объявление сохранено."
     )
-
-    await state.clear()
