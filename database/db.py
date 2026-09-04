@@ -344,3 +344,16 @@ def get_user_offers(user_id: int):
             """,
             (user_id,)
         ).fetchall()
+        
+def delete_offer(offer_id: int, user_id: int) -> bool:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            UPDATE offers
+            SET status = 'deleted'
+            WHERE id = ? AND user_id = ? AND status = 'active'
+            """,
+            (offer_id, user_id)
+        )
+
+        return cursor.rowcount > 0
