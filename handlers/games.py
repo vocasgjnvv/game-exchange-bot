@@ -32,20 +32,22 @@ async def my_games(message: Message):
             "Нажми «➕ Добавить игру», чтобы добавить первую."
         )
         return
-        
-    text = "🎮 <b>Мои игры</b>\n\n"
 
     for offer in offers:
-        text += (
+        text = (
             f"🆔 <b>#{offer['id']}</b>\n"
-            f"🎮 {offer['title']}\n"
-            f"🕹 {offer['platform']}\n"
-            f"📦 {'💿 Физический диск' if offer['format'] == 'physical' else '🔑 Игровой ключ'}\n"
-            f"📍 {offer['city']}\n"
-            f"📝 {offer['description'] or 'Без описания'}\n\n"
+            f"🎮 <b>{offer['title']}</b>\n"
+            f"🕹 Платформа: {offer['platform']}\n"
+            f"📦 Формат: "
+            f"{'💿 Физический диск' if offer['format'] == 'physical' else '🔑 Игровой ключ'}\n"
+            f"📍 Город: {offer['city']}\n"
+            f"📝 {offer['description'] or 'Без описания'}"
         )
 
-    await message.answer(text)
+        await message.answer(
+            text,
+            reply_markup=game_actions_keyboard(offer["id"])
+        )
     
 @router.message(F.text.startswith("🗑 Удалить #"))
 async def delete_game_handler(message: Message):
