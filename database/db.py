@@ -400,3 +400,120 @@ def delete_offer(offer_id: int, user_id: int) -> bool:
         )
 
         return cursor.rowcount > 0
+        
+def save_game_draft(telegram_id: int, data: dict, step: str):
+    with get_connection() as conn:
+        user = conn.execute(
+            "SELECT id FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        ).fetchone()
+
+        if not user:
+            return
+
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS game_drafts (
+                user_id INTEGER PRIMARY KEY,
+                title TEXT,
+                platform TEXT,
+                format TEXT,
+                condition TEXT,
+                key_region TEXT,
+                description TEXT,
+                current_step TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+            """
+        )
+
+        conn.execute(
+            """
+            INSERT INTO game_drafts (
+                user_id,
+                title,
+                platform,
+                format,
+                condition,
+                key_region,
+                description,
+                current_step,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(user_id) DO UPDATE SET
+                title = excluded.title,
+                platform = excluded.platform,
+                format = excluded.format,
+                condition = excluded.condition,
+                key_region = excluded.key_region,
+                description = excluded.description,
+                current_step = excluded.current_step,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                user["id"],
+                data.get("title"),
+                data.get("platform"),
+                data.get("format"),
+                data.get("condition"),
+                data.get("key_region"),
+                data.get("description"),
+                step,
+            )
+        )
+
+        conn.commit()
+
+
+def get_game_draft(telegram_id: int):
+    with get_connection() as conn:
+        user = conn.execute(
+            "SELECT id FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        ).fetchone()
+
+        if not user:
+            return None
+
+        table_exists = conn.execute(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type = 'table' AND name = 'game_drafts'
+            """
+        ).fetchone()
+
+        if not table_exists:
+            return None
+
+        return conn.execute(
+            """
+            SELECT *
+            FROM game_drafts
+            WHERE user_id = ?
+            """,
+            (user["id"],)
+        ).fetchone()
+
+
+def delete_game_draft(telegram_id: int):
+    with get_connection() as conn:
+        user = conn.execute(
+            "SELECT id FROM users WHERE telegram_id = ?",
+            (telegram_id,)
+        ).fetchone()
+
+        if not user:
+            return
+
+        conn.execute(
+            """
+            DELETE FROM game_drafts
+            WHERE user_id = ?
+            """,
+            (user["id"],)
+        )
+
+        conn.commit()
