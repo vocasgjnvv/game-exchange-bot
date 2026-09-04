@@ -4,7 +4,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
 from database.db import get_user
-from keyboards.keyboards import main_menu_keyboard
+from keyboards.keyboards import main_menu_keyboard, platform_keyboard
 
 
 router = Router()
@@ -55,15 +55,15 @@ async def add_game_title(message: Message, state: FSMContext):
         await message.answer("❌ Название слишком длинное. Максимум 100 символов.")
         return
 
-    await state.update_data(title=title)
+     await state.update_data(title=title)
 
-    await state.clear()
+     await state.set_state(AddGameState.waiting_for_platform)
 
-    await message.answer(
-        f"✅ Игра <b>{title}</b> принята.\n\n"
-        "Следующим шагом добавим выбор платформы.",
-        reply_markup=main_menu_keyboard(),
-    )
+     await message.answer(
+         f"🎮 Игра: <b>{title}</b>\n\n"
+         "Выберите платформу:",
+         reply_markup=platform_keyboard(),
+     )
 
 
 @router.message(F.text == "🎮 Мои игры")
