@@ -17,6 +17,7 @@ def main_menu_keyboard():
         keyboard=[
             [
                 KeyboardButton(text="🎮 Мои игры"),
+                KeyboardButton(text="➕ Добавить игру"),
                 KeyboardButton(text="🔎 Найти игру")
             ],
             [
