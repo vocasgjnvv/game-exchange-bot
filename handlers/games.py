@@ -12,6 +12,7 @@ router = Router()
 
 class AddGameState(StatesGroup):
     waiting_for_title = State()
+    waiting_for_platform = State()
 
 
 @router.message(F.text == "➕ Добавить игру")
