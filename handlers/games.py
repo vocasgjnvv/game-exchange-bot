@@ -36,7 +36,7 @@ async def add_game_start(message: Message, state: FSMContext):
 
 @router.message(AddGameState.waiting_for_title)
 async def add_game_title(message: Message, state: FSMContext):
-    title = message.text.strip()
+    title = (message.text or "").strip()
 
     if len(title) < 2:
         await message.answer("❌ Название слишком короткое.")
@@ -153,7 +153,7 @@ async def add_game_condition(message: Message, state: FSMContext):
 
 @router.message(AddGameState.waiting_for_region)
 async def add_game_region(message: Message, state: FSMContext):
-    region = message.text.strip()
+    region = (message.text or "").strip()
 
     if len(region) < 2:
         await message.answer(
@@ -180,7 +180,7 @@ async def add_game_region(message: Message, state: FSMContext):
 
 @router.message(AddGameState.waiting_for_description)
 async def add_game_description(message: Message, state: FSMContext):
-    description = message.text.strip()
+    description = (message.text or "").strip()
 
     if len(description) < 3:
         await message.answer(
