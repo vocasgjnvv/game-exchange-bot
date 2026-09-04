@@ -8,6 +8,7 @@ from keyboards.keyboards import (
     platform_keyboard,
     format_keyboard,
     condition_keyboard,
+    game_actions_keyboard,
 )
 
 router = Router()
