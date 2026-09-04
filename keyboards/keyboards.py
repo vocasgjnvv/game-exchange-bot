@@ -79,3 +79,13 @@ def condition_keyboard():
         ],
         resize_keyboard=True
     )
+    
+def game_actions_keyboard(offer_id: int):
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text=f"🗑 Удалить #{offer_id}")
+            ]
+        ],
+        resize_keyboard=True
+    )
