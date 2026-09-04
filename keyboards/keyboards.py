@@ -1,6 +1,4 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton
-
-
 def rules_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -10,8 +8,6 @@ def rules_keyboard():
         ],
         resize_keyboard=True
     )
-
-
 def main_menu_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -38,8 +34,6 @@ def main_menu_keyboard():
         ],
         resize_keyboard=True
     )
-
-
 def platform_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -58,8 +52,6 @@ def platform_keyboard():
         ],
         resize_keyboard=True
     )
-
-
 def format_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
@@ -72,7 +64,6 @@ def format_keyboard():
         ],
         resize_keyboard=True
     )
-    
 def condition_keyboard():
     return ReplyKeyboardMarkup(
         keyboard=[
