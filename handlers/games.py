@@ -69,7 +69,10 @@ async def add_game_platform(message: Message, state: FSMContext):
     platform = platform_map.get(message.text)
 
     if not platform:
-        await message.answer("❌ Выбери платформу кнопкой ниже.")
+        await message.answer(
+            "❌ Выбери платформу кнопкой ниже.",
+            reply_markup=platform_keyboard()
+        )
         return
 
     await state.update_data(platform=platform)
@@ -110,7 +113,8 @@ async def add_game_format(message: Message, state: FSMContext):
             "Например:\n"
             "🇷🇺 RU\n"
             "🇪🇺 EU\n"
-            "🌎 Global"
+            "🌎 Global\n\n"
+            "⚠️ Сам ключ отправлять не нужно."
         )
         return
 
@@ -152,11 +156,15 @@ async def add_game_region(message: Message, state: FSMContext):
     region = message.text.strip()
 
     if len(region) < 2:
-        await message.answer("❌ Укажи корректный регион активации.")
+        await message.answer(
+            "❌ Укажи корректный регион активации."
+        )
         return
 
     if len(region) > 50:
-        await message.answer("❌ Название региона слишком длинное.")
+        await message.answer(
+            "❌ Название региона слишком длинное."
+        )
         return
 
     await state.update_data(key_region=region)
@@ -175,11 +183,15 @@ async def add_game_description(message: Message, state: FSMContext):
     description = message.text.strip()
 
     if len(description) < 3:
-        await message.answer("❌ Описание слишком короткое.")
+        await message.answer(
+            "❌ Описание слишком короткое."
+        )
         return
 
     if len(description) > 1000:
-        await message.answer("❌ Описание слишком длинное.")
+        await message.answer(
+            "❌ Описание слишком длинное."
+        )
         return
 
     data = await state.get_data()
@@ -204,13 +216,14 @@ async def add_game_description(message: Message, state: FSMContext):
 
     try:
         game_id = get_or_create_game(
-            title=data["title"],
-            platform=data["platform"]
+            title=data["title"]
         )
 
         offer_id = create_offer(
-            user_id=message.from_user.id,
+            user_id=user["id"],
             game_id=game_id,
+            platform=data["platform"],
+            format_type=data["format"],
             condition=data.get("condition"),
             key_region=data.get("key_region"),
             description=description,
@@ -223,8 +236,8 @@ async def add_game_description(message: Message, state: FSMContext):
         await state.clear()
 
         await message.answer(
-            "❌ Не удалось сохранить игру.\n"
-            "Попробуй ещё раз."
+            "❌ Не удалось сохранить игру.\n\n"
+            "Попробуй добавить её ещё раз."
         )
         return
 
@@ -234,10 +247,13 @@ async def add_game_description(message: Message, state: FSMContext):
         "✅ <b>Игра успешно добавлена!</b>\n\n"
         f"🎮 Игра: <b>{data['title']}</b>\n"
         f"🕹 Платформа: <b>{data['platform']}</b>\n"
-        f"📦 Формат: <b>{'Физический диск' if data['format'] == 'physical' else 'Игровой ключ'}</b>\n"
+        f"📦 Формат: <b>"
+        f"{'Физический диск' if data['format'] == 'physical' else 'Игровой ключ'}"
+        f"</b>\n"
         f"🌍 Регион: <b>{data.get('key_region') or '—'}</b>\n"
         f"💿 Состояние: <b>{data.get('condition') or '—'}</b>\n"
         f"📍 Город: <b>{city}</b>\n"
         f"📝 Описание: <b>{description}</b>\n\n"
-        "🎉 Объявление сохранено."
+        f"🆔 Объявление №{offer_id}\n\n"
+        "🎉 Теперь эта игра сохранена и может участвовать в поиске обмена."
     )
