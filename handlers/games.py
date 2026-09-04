@@ -46,6 +46,38 @@ async def my_games(message: Message):
         )
 
     await message.answer(text)
+    
+@router.message(F.text.startswith("🗑 Удалить #"))
+async def delete_game_handler(message: Message):
+    user = get_user(message.from_user.id)
+
+    if not user:
+        await message.answer(
+            "❌ Профиль не найден. Выполни /start."
+        )
+        return
+
+    try:
+        offer_id = int(message.text.split("#")[1])
+    except (ValueError, IndexError):
+        await message.answer(
+            "❌ Не удалось определить игру."
+        )
+        return
+
+    deleted = delete_offer(offer_id, user["id"])
+
+    if not deleted:
+        await message.answer(
+            "❌ Игра не найдена или уже удалена."
+        )
+        return
+
+    await message.answer(
+        f"🗑 <b>Игра #{offer_id} удалена.</b>\n\n"
+        "Она больше не будет отображаться "
+        "в твоих активных играх."
+    )
 
 
 class AddGameState(StatesGroup):
