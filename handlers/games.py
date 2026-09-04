@@ -53,19 +53,22 @@ async def add_game_title(message: Message, state: FSMContext):
         return
 
     if len(title) > 100:
-        await message.answer("❌ Название слишком длинное. Максимум 100 символов.")
+        await message.answer(
+            "❌ Название слишком длинное. Максимум 100 символов."
+        )
         return
 
-     await state.update_data(title=title)
+    await state.update_data(title=title)
 
-     await state.set_state(AddGameState.waiting_for_platform)
+    await state.set_state(AddGameState.waiting_for_platform)
 
-     await message.answer(
-         f"🎮 Игра: <b>{title}</b>\n\n"
-         "Выберите платформу:",
-         reply_markup=platform_keyboard(),
-     )
-    
+    await message.answer(
+        f"🎮 Игра: <b>{title}</b>\n\n"
+        "Выберите платформу:",
+        reply_markup=platform_keyboard(),
+    )
+
+
 @router.message(AddGameState.waiting_for_platform)
 async def add_game_platform(message: Message, state: FSMContext):
     platform = (message.text or "").strip()
@@ -96,6 +99,7 @@ async def add_game_platform(message: Message, state: FSMContext):
         f"Игра: <b>{title}</b>\n\n"
         "Следующим шагом добавим выбор формата игры."
     )
+
 
 @router.message(F.text == "🎮 Мои игры")
 async def my_games_handler(message: Message):
