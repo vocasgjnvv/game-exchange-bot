@@ -31,6 +31,20 @@ async def my_games(message: Message):
             "Нажми «➕ Добавить игру», чтобы добавить первую."
         )
         return
+        
+    text = "🎮 <b>Мои игры</b>\n\n"
+
+    for offer in offers:
+        text += (
+            f"🆔 <b>#{offer['id']}</b>\n"
+            f"🎮 {offer['title']}\n"
+            f"🕹 {offer['platform']}\n"
+            f"📦 {offer['format']}\n"
+            f"📍 {offer['city']}\n"
+            f"📝 {offer['description'] or 'Без описания'}\n\n"
+        )
+
+    await message.answer(text)
 
 
 class AddGameState(StatesGroup):
