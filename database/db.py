@@ -260,3 +260,87 @@ def set_city(telegram_id: int, city: str):
             (city, telegram_id)
         )
         db.commit()
+def get_or_create_game(title: str) -> int:
+    normalized_title = title.strip().lower()
+
+    with get_connection() as conn:
+        game = conn.execute(
+            "SELECT id FROM games WHERE normalized_title = ?",
+            (normalized_title,)
+        ).fetchone()
+
+        if game:
+            return game["id"]
+
+        cursor = conn.execute(
+            """
+            INSERT INTO games (title, normalized_title)
+            VALUES (?, ?)
+            """,
+            (title.strip(), normalized_title)
+        )
+
+        return cursor.lastrowid
+
+
+def create_offer(
+    user_id: int,
+    game_id: int,
+    platform: str,
+    format_type: str,
+    condition: str | None = None,
+    key_region: str | None = None,
+    description: str | None = None,
+    city: str | None = None,
+) -> int:
+    with get_connection() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO offers (
+                user_id,
+                game_id,
+                platform,
+                format,
+                condition,
+                key_region,
+                description,
+                city
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                user_id,
+                game_id,
+                platform,
+                format_type,
+                condition,
+                key_region,
+                description,
+                city,
+            )
+        )
+
+        return cursor.lastrowid
+
+
+def get_user_offers(user_id: int):
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT
+                offers.id,
+                games.title,
+                offers.platform,
+                offers.format,
+                offers.condition,
+                offers.key_region,
+                offers.description,
+                offers.city,
+                offers.status
+            FROM offers
+            JOIN games ON games.id = offers.game_id
+            WHERE offers.user_id = ?
+            ORDER BY offers.created_at DESC
+            """,
+            (user_id,)
+        ).fetchall()
