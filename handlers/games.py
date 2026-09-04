@@ -199,8 +199,6 @@ async def add_game_format(message: Message, state: FSMContext):
             reply_markup=condition_keyboard()
         )
         return
- 
-        return
 
     if message.text == "🔑 Игровой ключ":
         await state.update_data(
