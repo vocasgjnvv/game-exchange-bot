@@ -39,7 +39,7 @@ async def my_games(message: Message):
             f"🆔 <b>#{offer['id']}</b>\n"
             f"🎮 {offer['title']}\n"
             f"🕹 {offer['platform']}\n"
-            f"📦 {offer['format']}\n"
+            f"📦 {'💿 Физический диск' if offer['format'] == 'physical' else '🔑 Игровой ключ'}\n"
             f"📍 {offer['city']}\n"
             f"📝 {offer['description'] or 'Без описания'}\n\n"
         )
