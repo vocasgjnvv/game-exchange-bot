@@ -4,7 +4,11 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
 from database.db import get_user
-from keyboards.keyboards import main_menu_keyboard, platform_keyboard
+from keyboards.keyboards import (
+    main_menu_keyboard,
+    platform_keyboard,
+    format_keyboard,
+)
 
 
 router = Router()
@@ -13,6 +17,7 @@ router = Router()
 class AddGameState(StatesGroup):
     waiting_for_title = State()
     waiting_for_platform = State()
+    waiting_for_format = State()
 
 
 @router.message(F.text == "➕ Добавить игру")
@@ -94,10 +99,43 @@ async def add_game_platform(message: Message, state: FSMContext):
 
     await state.update_data(platform=platform)
 
+    await state.set_state(AddGameState.waiting_for_format)
+
     await message.answer(
-        f"✅ Платформа: <b>{platform}</b>\n\n"
-        f"Игра: <b>{title}</b>\n\n"
-        "Следующим шагом добавим выбор формата игры."
+        f"🎮 Игра: <b>{title}</b>\n"
+        f"🕹 Платформа: <b>{platform}</b>\n\n"
+        "Выберите формат игры:",
+        reply_markup=format_keyboard(),
+    )
+
+
+@router.message(AddGameState.waiting_for_format)
+async def add_game_format(message: Message, state: FSMContext):
+    format_type = (message.text or "").strip()
+
+    allowed_formats = {
+        "💿 Физический диск",
+        "🔑 Игровой ключ",
+    }
+
+    if format_type not in allowed_formats:
+        await message.answer(
+            "❌ Выберите формат кнопкой ниже.",
+            reply_markup=format_keyboard(),
+        )
+        return
+
+    data = await state.get_data()
+    title = data.get("title")
+    platform = data.get("platform")
+
+    await state.update_data(format=format_type)
+
+    await message.answer(
+        f"🎮 Игра: <b>{title}</b>\n"
+        f"🕹 Платформа: <b>{platform}</b>\n"
+        f"📦 Формат: <b>{format_type}</b>\n\n"
+        "Следующим шагом добавим данные для объявления."
     )
 
 
