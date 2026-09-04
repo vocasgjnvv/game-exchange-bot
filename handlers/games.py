@@ -65,7 +65,37 @@ async def add_game_title(message: Message, state: FSMContext):
          "Выберите платформу:",
          reply_markup=platform_keyboard(),
      )
+    
+@router.message(AddGameState.waiting_for_platform)
+async def add_game_platform(message: Message, state: FSMContext):
+    platform = (message.text or "").strip()
 
+    allowed_platforms = {
+        "🎮 PS3",
+        "🎮 PS4",
+        "🎮 PS5",
+        "🟩 Xbox One",
+        "🟩 Xbox Series X/S",
+        "💻 PC",
+    }
+
+    if platform not in allowed_platforms:
+        await message.answer(
+            "❌ Выберите платформу кнопкой ниже.",
+            reply_markup=platform_keyboard(),
+        )
+        return
+
+    data = await state.get_data()
+    title = data.get("title")
+
+    await state.update_data(platform=platform)
+
+    await message.answer(
+        f"✅ Платформа: <b>{platform}</b>\n\n"
+        f"Игра: <b>{title}</b>\n\n"
+        "Следующим шагом добавим выбор формата игры."
+    )
 
 @router.message(F.text == "🎮 Мои игры")
 async def my_games_handler(message: Message):
