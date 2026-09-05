@@ -517,3 +517,313 @@ def delete_game_draft(telegram_id: int):
         )
 
         conn.commit()
+        
+def save_like(
+    from_user_id: int,
+    offer_id: int,
+    action: str
+):
+    """
+    Сохраняет действие пользователя:
+    action = 'like' или 'dislike'.
+
+    Возвращает информацию о взаимном лайке,
+    если он появился.
+    """
+
+    with get_connection() as conn:
+
+        offer = conn.execute(
+            """
+            SELECT
+                offers.id,
+                offers.user_id,
+                offers.game_id
+            FROM offers
+            WHERE offers.id = ?
+              AND offers.status = 'active'
+            """,
+            (offer_id,)
+        ).fetchone()
+
+        if not offer:
+            return None
+
+        to_user_id = offer["user_id"]
+
+        if from_user_id == to_user_id:
+            return None
+
+        conn.execute(
+            """
+            INSERT INTO likes (
+                from_user_id,
+                to_user_id,
+                offer_id,
+                action
+            )
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(from_user_id, offer_id)
+            DO UPDATE SET
+                action = excluded.action,
+                created_at = CURRENT_TIMESTAMP
+            """,
+            (
+                from_user_id,
+                to_user_id,
+                offer_id,
+                action
+            )
+        )
+
+        conn.commit()
+
+        if action != "like":
+            return None
+
+        # Ищем лайк от владельца объявления
+        # на любую активную игру текущего пользователя.
+        mutual = conn.execute(
+            """
+            SELECT
+                likes.id,
+                likes.offer_id,
+                likes.to_user_id,
+                offers.id AS my_offer_id,
+                offers.game_id AS my_game_id
+            FROM likes
+            JOIN offers
+                ON offers.id = likes.offer_id
+            WHERE likes.from_user_id = ?
+              AND likes.to_user_id = ?
+              AND likes.action = 'like'
+              AND offers.status = 'active'
+            ORDER BY likes.created_at DESC
+            LIMIT 1
+            """,
+            (
+                to_user_id,
+                from_user_id
+            )
+        ).fetchone()
+
+        if not mutual:
+            return None
+
+        return {
+            "user_id": to_user_id,
+            "liked_offer_id": offer_id,
+            "my_offer_id": mutual["my_offer_id"],
+        }
+
+
+def get_next_search_offers(
+    user_id: int,
+    title: str = "",
+    platform: str = "",
+    city: str = ""
+):
+    """
+    Возвращает объявления, которые пользователь
+    ещё не лайкал и не дизлайкал.
+    """
+
+    with get_connection() as conn:
+
+        query = """
+            SELECT
+                offers.id,
+                offers.user_id,
+                games.title,
+                offers.platform,
+                offers.format,
+                offers.condition,
+                offers.key_region,
+                offers.description,
+                offers.city,
+                users.username,
+                users.first_name
+            FROM offers
+            JOIN games
+                ON games.id = offers.game_id
+            JOIN users
+                ON users.id = offers.user_id
+            WHERE offers.status = 'active'
+              AND offers.user_id != ?
+              AND users.is_blocked = 0
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM likes
+                  WHERE likes.from_user_id = ?
+                    AND likes.offer_id = offers.id
+              )
+        """
+
+        params = [
+            user_id,
+            user_id,
+        ]
+
+        if title:
+            query += """
+                AND games.title LIKE ?
+            """
+            params.append(f"%{title}%")
+
+        if platform:
+            query += """
+                AND offers.platform = ?
+            """
+            params.append(platform)
+
+        if city:
+            query += """
+                AND offers.city LIKE ?
+            """
+            params.append(f"%{city}%")
+
+        query += """
+            ORDER BY offers.created_at DESC
+            LIMIT 20
+        """
+
+        return conn.execute(
+            query,
+            params
+        ).fetchall()
+
+
+def get_offer(offer_id: int):
+    """
+    Получает одно активное объявление
+    вместе с информацией о владельце.
+    """
+
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT
+                offers.id,
+                offers.user_id,
+                games.title,
+                offers.platform,
+                offers.format,
+                offers.condition,
+                offers.key_region,
+                offers.description,
+                offers.city,
+                users.telegram_id,
+                users.username,
+                users.first_name,
+                users.rating,
+                users.reviews_count
+            FROM offers
+            JOIN games
+                ON games.id = offers.game_id
+            JOIN users
+                ON users.id = offers.user_id
+            WHERE offers.id = ?
+              AND offers.status = 'active'
+              AND users.is_blocked = 0
+            """,
+            (offer_id,)
+        ).fetchone()
+
+
+def get_user_active_offers(user_id: int):
+    """
+    Возвращает активные объявления пользователя.
+    """
+
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT
+                offers.id,
+                games.title,
+                offers.platform,
+                offers.format,
+                offers.condition,
+                offers.key_region,
+                offers.description,
+                offers.city
+            FROM offers
+            JOIN games
+                ON games.id = offers.game_id
+            WHERE offers.user_id = ?
+              AND offers.status = 'active'
+            ORDER BY offers.created_at DESC
+            """,
+            (user_id,)
+        ).fetchall()
+
+
+def create_notification(
+    user_id: int,
+    notification_type: str,
+    payload: str = ""
+):
+    """
+    Создаёт уведомление пользователю.
+    """
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            INSERT INTO notifications (
+                user_id,
+                type,
+                payload
+            )
+            VALUES (?, ?, ?)
+            """,
+            (
+                user_id,
+                notification_type,
+                payload
+            )
+        )
+
+        conn.commit()
+
+
+def get_unread_notifications(user_id: int):
+    """
+    Возвращает непрочитанные уведомления.
+    """
+
+    with get_connection() as conn:
+        return conn.execute(
+            """
+            SELECT
+                id,
+                type,
+                payload,
+                created_at
+            FROM notifications
+            WHERE user_id = ?
+              AND is_read = 0
+            ORDER BY created_at DESC
+            LIMIT 50
+            """,
+            (user_id,)
+        ).fetchall()
+
+
+def mark_notifications_read(user_id: int):
+    """
+    Помечает уведомления пользователя прочитанными.
+    """
+
+    with get_connection() as conn:
+        conn.execute(
+            """
+            UPDATE notifications
+            SET is_read = 1
+            WHERE user_id = ?
+              AND is_read = 0
+            """,
+            (user_id,)
+        )
+
+        conn.commit()
