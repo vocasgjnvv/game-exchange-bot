@@ -15,7 +15,6 @@ def get_connection():
 
 def init_db():
     with get_connection() as db:
-
         db.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,7 +53,6 @@ def init_db():
                 city TEXT NOT NULL,
                 status TEXT NOT NULL DEFAULT 'active',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
                 FOREIGN KEY (user_id) REFERENCES users(id),
                 FOREIGN KEY (game_id) REFERENCES games(id)
             )
@@ -68,7 +66,6 @@ def init_db():
                 platform TEXT NOT NULL,
                 format TEXT NOT NULL,
                 priority INTEGER NOT NULL DEFAULT 1,
-
                 FOREIGN KEY (user_id) REFERENCES users(id),
                 FOREIGN KEY (game_id) REFERENCES games(id)
             )
@@ -82,9 +79,7 @@ def init_db():
                 offer_id INTEGER NOT NULL,
                 action TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
                 UNIQUE(from_user_id, offer_id),
-
                 FOREIGN KEY (from_user_id) REFERENCES users(id),
                 FOREIGN KEY (to_user_id) REFERENCES users(id),
                 FOREIGN KEY (offer_id) REFERENCES offers(id)
@@ -99,7 +94,6 @@ def init_db():
                 offer_id INTEGER NOT NULL,
                 text TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
                 FOREIGN KEY (from_user_id) REFERENCES users(id),
                 FOREIGN KEY (to_user_id) REFERENCES users(id),
                 FOREIGN KEY (offer_id) REFERENCES offers(id)
@@ -117,7 +111,6 @@ def init_db():
                 status TEXT NOT NULL DEFAULT 'active',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 closed_at TEXT,
-
                 FOREIGN KEY (user1_id) REFERENCES users(id),
                 FOREIGN KEY (user2_id) REFERENCES users(id),
                 FOREIGN KEY (offer1_id) REFERENCES offers(id),
@@ -132,7 +125,6 @@ def init_db():
                 sender_user_id INTEGER NOT NULL,
                 text TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
                 FOREIGN KEY (deal_id) REFERENCES deals(id),
                 FOREIGN KEY (sender_user_id) REFERENCES users(id)
             )
@@ -147,9 +139,7 @@ def init_db():
                 rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
                 text TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
                 UNIQUE(deal_id, from_user_id),
-
                 FOREIGN KEY (deal_id) REFERENCES deals(id),
                 FOREIGN KEY (from_user_id) REFERENCES users(id),
                 FOREIGN KEY (to_user_id) REFERENCES users(id)
@@ -166,7 +156,6 @@ def init_db():
                 description TEXT,
                 status TEXT NOT NULL DEFAULT 'new',
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
                 FOREIGN KEY (reporter_user_id) REFERENCES users(id),
                 FOREIGN KEY (reported_user_id) REFERENCES users(id),
                 FOREIGN KEY (deal_id) REFERENCES deals(id)
@@ -177,9 +166,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS favorites (
                 user_id INTEGER NOT NULL,
                 offer_id INTEGER NOT NULL,
-
                 PRIMARY KEY (user_id, offer_id),
-
                 FOREIGN KEY (user_id) REFERENCES users(id),
                 FOREIGN KEY (offer_id) REFERENCES offers(id)
             )
@@ -189,9 +176,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS blocks (
                 user_id INTEGER NOT NULL,
                 blocked_user_id INTEGER NOT NULL,
-
                 PRIMARY KEY (user_id, blocked_user_id),
-
                 FOREIGN KEY (user_id) REFERENCES users(id),
                 FOREIGN KEY (blocked_user_id) REFERENCES users(id)
             )
@@ -205,7 +190,21 @@ def init_db():
                 payload TEXT,
                 is_read INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
 
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS game_drafts (
+                user_id INTEGER PRIMARY KEY,
+                title TEXT,
+                platform TEXT,
+                format TEXT,
+                condition TEXT,
+                key_region TEXT,
+                description TEXT,
+                current_step TEXT NOT NULL,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
@@ -221,7 +220,11 @@ def get_user(telegram_id: int):
         ).fetchone()
 
 
-def create_user(telegram_id: int, username: str | None, first_name: str):
+def create_user(
+    telegram_id: int,
+    username: str | None,
+    first_name: str
+):
     with get_connection() as db:
         db.execute(
             """
@@ -260,12 +263,18 @@ def set_city(telegram_id: int, city: str):
             (city, telegram_id)
         )
         db.commit()
+
+
 def get_or_create_game(title: str) -> int:
     normalized_title = title.strip().lower()
 
     with get_connection() as conn:
         game = conn.execute(
-            "SELECT id FROM games WHERE normalized_title = ?",
+            """
+            SELECT id
+            FROM games
+            WHERE normalized_title = ?
+            """,
             (normalized_title,)
         ).fetchone()
 
@@ -316,7 +325,7 @@ def create_offer(
                 condition,
                 key_region,
                 description,
-                city,
+                city
             )
         )
 
@@ -339,12 +348,14 @@ def get_user_offers(user_id: int):
                 offers.status
             FROM offers
             JOIN games ON games.id = offers.game_id
-            WHERE offers.user_id = ? AND offers.status = 'active'
+            WHERE offers.user_id = ?
+              AND offers.status = 'active'
             ORDER BY offers.created_at DESC
             """,
             (user_id,)
         ).fetchall()
-        
+
+
 def search_offers(
     title: str = "",
     platform: str = "",
@@ -384,49 +395,46 @@ def search_offers(
             query += " AND offers.city LIKE ?"
             params.append(f"%{city}%")
 
-        query += " ORDER BY offers.created_at DESC"
+        query += """
+            ORDER BY offers.created_at DESC
+        """
 
         return conn.execute(query, params).fetchall()
-        
+
+
 def delete_offer(offer_id: int, user_id: int) -> bool:
     with get_connection() as conn:
         cursor = conn.execute(
             """
             UPDATE offers
             SET status = 'deleted'
-            WHERE id = ? AND user_id = ? AND status = 'active'
+            WHERE id = ?
+              AND user_id = ?
+              AND status = 'active'
             """,
             (offer_id, user_id)
         )
 
         return cursor.rowcount > 0
-        
-def save_game_draft(telegram_id: int, data: dict, step: str):
+
+
+def save_game_draft(
+    telegram_id: int,
+    data: dict,
+    step: str
+):
     with get_connection() as conn:
         user = conn.execute(
-            "SELECT id FROM users WHERE telegram_id = ?",
+            """
+            SELECT id
+            FROM users
+            WHERE telegram_id = ?
+            """,
             (telegram_id,)
         ).fetchone()
 
         if not user:
             return
-
-        conn.execute(
-            """
-            CREATE TABLE IF NOT EXISTS game_drafts (
-                user_id INTEGER PRIMARY KEY,
-                title TEXT,
-                platform TEXT,
-                format TEXT,
-                condition TEXT,
-                key_region TEXT,
-                description TEXT,
-                current_step TEXT NOT NULL,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-            """
-        )
 
         conn.execute(
             """
@@ -442,7 +450,9 @@ def save_game_draft(telegram_id: int, data: dict, step: str):
                 updated_at
             )
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            ON CONFLICT(user_id) DO UPDATE SET
+
+            ON CONFLICT(user_id)
+            DO UPDATE SET
                 title = excluded.title,
                 platform = excluded.platform,
                 format = excluded.format,
@@ -460,7 +470,7 @@ def save_game_draft(telegram_id: int, data: dict, step: str):
                 data.get("condition"),
                 data.get("key_region"),
                 data.get("description"),
-                step,
+                step
             )
         )
 
@@ -470,22 +480,15 @@ def save_game_draft(telegram_id: int, data: dict, step: str):
 def get_game_draft(telegram_id: int):
     with get_connection() as conn:
         user = conn.execute(
-            "SELECT id FROM users WHERE telegram_id = ?",
+            """
+            SELECT id
+            FROM users
+            WHERE telegram_id = ?
+            """,
             (telegram_id,)
         ).fetchone()
 
         if not user:
-            return None
-
-        table_exists = conn.execute(
-            """
-            SELECT name
-            FROM sqlite_master
-            WHERE type = 'table' AND name = 'game_drafts'
-            """
-        ).fetchone()
-
-        if not table_exists:
             return None
 
         return conn.execute(
@@ -501,7 +504,11 @@ def get_game_draft(telegram_id: int):
 def delete_game_draft(telegram_id: int):
     with get_connection() as conn:
         user = conn.execute(
-            "SELECT id FROM users WHERE telegram_id = ?",
+            """
+            SELECT id
+            FROM users
+            WHERE telegram_id = ?
+            """,
             (telegram_id,)
         ).fetchone()
 
@@ -517,31 +524,23 @@ def delete_game_draft(telegram_id: int):
         )
 
         conn.commit()
-        
+
+
 def save_like(
     from_user_id: int,
     offer_id: int,
     action: str
 ):
-    """
-    Сохраняет действие пользователя:
-    action = 'like' или 'dislike'.
-
-    Возвращает информацию о взаимном лайке,
-    если он появился.
-    """
-
     with get_connection() as conn:
-
         offer = conn.execute(
             """
             SELECT
-                offers.id,
-                offers.user_id,
-                offers.game_id
+                id,
+                user_id,
+                game_id
             FROM offers
-            WHERE offers.id = ?
-              AND offers.status = 'active'
+            WHERE id = ?
+              AND status = 'active'
             """,
             (offer_id,)
         ).fetchone()
@@ -563,6 +562,7 @@ def save_like(
                 action
             )
             VALUES (?, ?, ?, ?)
+
             ON CONFLICT(from_user_id, offer_id)
             DO UPDATE SET
                 action = excluded.action,
@@ -581,16 +581,10 @@ def save_like(
         if action != "like":
             return None
 
-        # Ищем лайк от владельца объявления
-        # на любую активную игру текущего пользователя.
         mutual = conn.execute(
             """
             SELECT
-                likes.id,
-                likes.offer_id,
-                likes.to_user_id,
-                offers.id AS my_offer_id,
-                offers.game_id AS my_game_id
+                offers.id AS my_offer_id
             FROM likes
             JOIN offers
                 ON offers.id = likes.offer_id
@@ -613,7 +607,7 @@ def save_like(
         return {
             "user_id": to_user_id,
             "liked_offer_id": offer_id,
-            "my_offer_id": mutual["my_offer_id"],
+            "my_offer_id": mutual["my_offer_id"]
         }
 
 
@@ -623,13 +617,7 @@ def get_next_search_offers(
     platform: str = "",
     city: str = ""
 ):
-    """
-    Возвращает объявления, которые пользователь
-    ещё не лайкал и не дизлайкал.
-    """
-
     with get_connection() as conn:
-
         query = """
             SELECT
                 offers.id,
@@ -642,7 +630,8 @@ def get_next_search_offers(
                 offers.description,
                 offers.city,
                 users.username,
-                users.first_name
+                users.first_name,
+                users.rating
             FROM offers
             JOIN games
                 ON games.id = offers.game_id
@@ -661,7 +650,7 @@ def get_next_search_offers(
 
         params = [
             user_id,
-            user_id,
+            user_id
         ]
 
         if title:
@@ -694,11 +683,6 @@ def get_next_search_offers(
 
 
 def get_offer(offer_id: int):
-    """
-    Получает одно активное объявление
-    вместе с информацией о владельце.
-    """
-
     with get_connection() as conn:
         return conn.execute(
             """
@@ -731,10 +715,6 @@ def get_offer(offer_id: int):
 
 
 def get_user_active_offers(user_id: int):
-    """
-    Возвращает активные объявления пользователя.
-    """
-
     with get_connection() as conn:
         return conn.execute(
             """
@@ -756,74 +736,3 @@ def get_user_active_offers(user_id: int):
             """,
             (user_id,)
         ).fetchall()
-
-
-def create_notification(
-    user_id: int,
-    notification_type: str,
-    payload: str = ""
-):
-    """
-    Создаёт уведомление пользователю.
-    """
-
-    with get_connection() as conn:
-        conn.execute(
-            """
-            INSERT INTO notifications (
-                user_id,
-                type,
-                payload
-            )
-            VALUES (?, ?, ?)
-            """,
-            (
-                user_id,
-                notification_type,
-                payload
-            )
-        )
-
-        conn.commit()
-
-
-def get_unread_notifications(user_id: int):
-    """
-    Возвращает непрочитанные уведомления.
-    """
-
-    with get_connection() as conn:
-        return conn.execute(
-            """
-            SELECT
-                id,
-                type,
-                payload,
-                created_at
-            FROM notifications
-            WHERE user_id = ?
-              AND is_read = 0
-            ORDER BY created_at DESC
-            LIMIT 50
-            """,
-            (user_id,)
-        ).fetchall()
-
-
-def mark_notifications_read(user_id: int):
-    """
-    Помечает уведомления пользователя прочитанными.
-    """
-
-    with get_connection() as conn:
-        conn.execute(
-            """
-            UPDATE notifications
-            SET is_read = 1
-            WHERE user_id = ?
-              AND is_read = 0
-            """,
-            (user_id,)
-        )
-
-        conn.commit()
