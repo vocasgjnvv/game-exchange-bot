@@ -45,6 +45,17 @@ def exchange_actions_keyboard():
             [
                 KeyboardButton(text="❤️"),
                 KeyboardButton(text="👎"),
+                KeyboardButton(text="✉️"),
+                KeyboardButton(text="🏠"),
+            ]
+        ],
+        resize_keyboard=True
+    )
+    return ReplyKeyboardMarkup(
+        keyboard=[
+            [
+                KeyboardButton(text="❤️"),
+                KeyboardButton(text="👎"),
                 KeyboardButton(text="💌")
             ],
             [
