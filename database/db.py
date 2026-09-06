@@ -1002,3 +1002,66 @@ def delete_game_draft(telegram_id: int):
         )
 
         db.commit()
+
+# ============================================================
+# COMPATIBILITY
+# ============================================================
+
+def set_city(telegram_id: int, city: str):
+    with get_connection() as db:
+        db.execute(
+            """
+            UPDATE users
+            SET city = ?,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE telegram_id = ?
+            """,
+            (city.strip(), telegram_id)
+        )
+        db.commit()
+
+
+def search_offers(
+    user_id: int,
+    title: str | None = None,
+    platform: str | None = None
+):
+    with get_connection() as db:
+        query = """
+            SELECT
+                offers.id,
+                offers.user_id,
+                games.title,
+                offers.platform,
+                offers.format,
+                offers.condition,
+                offers.key_region,
+                offers.description,
+                offers.city,
+                offers.search_location
+            FROM offers
+            JOIN games
+                ON games.id = offers.game_id
+            WHERE offers.status = 'active'
+              AND offers.user_id != ?
+        """
+
+        params = [user_id]
+
+        if title:
+            query += """
+                AND games.normalized_title LIKE ?
+            """
+            params.append(f"%{title.strip().lower()}%")
+
+        if platform:
+            query += """
+                AND offers.platform = ?
+            """
+            params.append(platform)
+
+        query += """
+            ORDER BY offers.created_at DESC
+        """
+
+        return db.execute(query, params).fetchall()
