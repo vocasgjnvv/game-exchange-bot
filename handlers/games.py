@@ -6,6 +6,7 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 from database.db import (
+    get_connection,
     get_user,
     get_or_create_game,
     create_offer,
@@ -139,7 +140,7 @@ async def find_game_start(
         )
         return
 
-    with __import__("database.db", fromlist=["get_connection"]).get_connection() as db:
+     with get_connection() as db:
         active_offer = db.execute(
             """
             SELECT id
