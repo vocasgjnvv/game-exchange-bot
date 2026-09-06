@@ -140,7 +140,7 @@ async def find_game_start(
         )
         return
 
-     with get_connection() as db:
+    with get_connection() as db:
         active_offer = db.execute(
             """
             SELECT id
