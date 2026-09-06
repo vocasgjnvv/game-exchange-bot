@@ -970,3 +970,169 @@ async def interest_dislike(
     await callback.message.edit_reply_markup(
         reply_markup=None
     )
+    )
+
+
+@router.callback_query(
+    F.data.startswith("interest_like:")
+)
+async def interest_like(
+    callback: CallbackQuery,
+    bot: Bot,
+):
+    try:
+        _, liker_id, liker_offer_id, owner_offer_id = (
+            callback.data.split(":")
+        )
+
+        liker_id = int(liker_id)
+        liker_offer_id = int(liker_offer_id)
+        owner_offer_id = int(owner_offer_id)
+
+    except (ValueError, AttributeError):
+        await callback.answer(
+            "❌ Некорректное действие.",
+            show_alert=True,
+        )
+        return
+
+    owner = get_user(callback.from_user.id)
+
+    if not owner:
+        await callback.answer(
+            "❌ Пользователь не найден.",
+            show_alert=True,
+        )
+        return
+
+    owner_offer = get_active_user_offer(
+        owner["id"]
+    )
+
+    if not owner_offer or owner_offer["id"] != owner_offer_id:
+        await callback.answer(
+            "❌ Объявление больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    liker_offer = get_offer(liker_offer_id)
+
+    if not liker_offer or liker_offer["user_id"] != liker_id:
+        await callback.answer(
+            "❌ Объявление пользователя больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    result = save_like(
+        from_user_id=owner["id"],
+        offer_id=liker_offer_id,
+        action="like",
+    )
+
+    await callback.answer()
+
+    if not result:
+        await callback.message.edit_reply_markup(
+            reply_markup=None
+        )
+        return
+
+    if result["type"] != "mutual":
+        await callback.message.edit_reply_markup(
+            reply_markup=None
+        )
+        return
+
+    await callback.message.edit_reply_markup(
+        reply_markup=None
+    )
+
+    await bot.send_message(
+        callback.from_user.id,
+        "🎉 <b>Взаимный лайк!</b>\n\n"
+        "Вы понравились друг другу.\n\n"
+        f"{contact_text(liker_id)}",
+        reply_markup=main_menu_keyboard(),
+    )
+
+    liker = get_user_contact(liker_id)
+
+    if liker:
+        try:
+            await bot.send_message(
+                liker["telegram_id"],
+                "🎉 <b>Взаимный лайк!</b>\n\n"
+                "Вы понравились друг другу.\n\n"
+                f"{contact_text(owner['id'])}",
+                reply_markup=main_menu_keyboard(),
+            )
+        except Exception:
+            pass
+
+
+@router.callback_query(
+    F.data.startswith("interest_dislike:")
+)
+async def interest_dislike(
+    callback: CallbackQuery,
+):
+    try:
+        _, liker_id, liker_offer_id, owner_offer_id = (
+            callback.data.split(":")
+        )
+
+        liker_id = int(liker_id)
+        liker_offer_id = int(liker_offer_id)
+        owner_offer_id = int(owner_offer_id)
+
+    except (ValueError, AttributeError):
+        await callback.answer(
+            "❌ Некорректное действие.",
+            show_alert=True,
+        )
+        return
+
+    owner = get_user(callback.from_user.id)
+
+    if not owner:
+        await callback.answer(
+            "❌ Пользователь не найден.",
+            show_alert=True,
+        )
+        return
+
+    owner_offer = get_active_user_offer(
+        owner["id"]
+    )
+
+    if not owner_offer or owner_offer["id"] != owner_offer_id:
+        await callback.answer(
+            "❌ Объявление больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    liker_offer = get_offer(liker_offer_id)
+
+    if not liker_offer or liker_offer["user_id"] != liker_id:
+        await callback.answer(
+            "❌ Объявление пользователя больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    save_like(
+        from_user_id=owner["id"],
+        offer_id=liker_offer_id,
+        action="dislike",
+    )
+
+    await callback.answer(
+        "👎 Не подходит."
+    )
+
+    await callback.message.edit_reply_markup(
+        reply_markup=None
+    )
