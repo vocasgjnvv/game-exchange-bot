@@ -1,76 +1,56 @@
-from html import escape
-
 from aiogram import Router, F
 from aiogram.filters import CommandStart
 from aiogram.fsm.context import FSMContext
-from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message
 
 from database.db import (
     get_user,
     create_user,
     accept_rules,
-    set_city,
 )
 
 from keyboards.keyboards import (
     rules_keyboard,
     main_menu_keyboard,
-    back_to_main_keyboard,
 )
-
 
 router = Router()
 
 
-class RegistrationState(StatesGroup):
-    waiting_for_city = State()
-
+# ============================================================
+# RULES
+# ============================================================
 
 RULES_TEXT = """
 <b>🎮 GAME EXCHANGE</b>
 
-Добро пожаловать в сервис обмена играми.
+Сервис помогает находить пользователей для обмена играми.
 
-Здесь пользователи могут находить друг друга
-и самостоятельно договариваться об обмене своими играми.
+Ты создаёшь объявление со своей игрой,
+просматриваешь объявления других пользователей
+и можешь поставить ❤️ или 👎.
 
-<b>Поддерживаются:</b>
-
-🎮 PlayStation 3
-🎮 PlayStation 4
-🎮 PlayStation 5
-🎮 Xbox One
-🎮 Xbox Series X/S
-💻 PC
-
-<b>Форматы:</b>
-
-💿 Физический диск
-🔑 Игровой ключ
+Если вы оба поставите ❤️ —
+контакт Telegram будет сразу открыт обоим пользователям.
 
 <b>Важно:</b>
 
-• Ключ игры нельзя публиковать в объявлении.
-• Для ключа указывается только регион активации.
-• Запрещены мошенничество и нерабочие ключи.
-• Нельзя передавать пароли и коды подтверждения.
-• Нельзя спамить, оскорблять или угрожать.
-• Нельзя пытаться обмануть другого пользователя.
+• Сервис только помогает найти друг друга.
 • Сервис не является стороной сделки.
 • Сервис не гарантирует получение товара.
-• Сервис не гарантирует подлинность ключа.
+• Сервис не гарантирует подлинность игры или ключа.
 • Сервис не гарантирует соответствие товара описанию.
+• Сервис не гарантирует выполнение договорённостей.
 • Условия обмена пользователи согласовывают самостоятельно.
-• За нарушения пользователь может получить ограничение или блокировку.
+• Соблюдай правила платформ и будь внимателен при обмене.
 
-Нажимая <b>«✅ Продолжить»</b>, вы принимаете правила.
+Нажимая <b>«➡️ Продолжить»</b>, ты принимаешь правила.
 """
 
 
-# =========================================================
+# ============================================================
 # /start
-# =========================================================
+# ============================================================
 
 @router.message(CommandStart())
 async def start_handler(
@@ -82,7 +62,6 @@ async def start_handler(
     if user is None:
         return
 
-    # При /start всегда убираем старое состояние
     await state.clear()
 
     existing_user = get_user(user.id)
@@ -99,7 +78,7 @@ async def start_handler(
     if not existing_user:
         await message.answer(
             "❌ Не удалось создать профиль.\n\n"
-            "Попробуйте выполнить /start ещё раз."
+            "Попробуй выполнить /start ещё раз."
         )
         return
 
@@ -117,31 +96,18 @@ async def start_handler(
         )
         return
 
-    if not existing_user["city"]:
-        await state.set_state(
-            RegistrationState.waiting_for_city
-        )
-
-        await message.answer(
-            "📍 <b>Укажите ваш город.</b>\n\n"
-            "Например: Калининград",
-            reply_markup=back_to_main_keyboard(),
-        )
-        return
-
     await message.answer(
         "🎮 <b>GAME EXCHANGE</b>\n\n"
-        "С возвращением!\n\n"
-        "Выберите действие:",
+        "Добро пожаловать обратно!",
         reply_markup=main_menu_keyboard(),
     )
 
 
-# =========================================================
-# Принятие правил
-# =========================================================
+# ============================================================
+# ACCEPT RULES
+# ============================================================
 
-@router.message(F.text == "✅ Продолжить")
+@router.message(F.text == "➡️ Продолжить")
 async def accept_rules_handler(
     message: Message,
     state: FSMContext,
@@ -160,12 +126,12 @@ async def accept_rules_handler(
             first_name=user.first_name or "Пользователь",
         )
 
-    existing_user = get_user(user.id)
+        existing_user = get_user(user.id)
 
     if not existing_user:
         await message.answer(
             "❌ Не удалось создать профиль.\n\n"
-            "Попробуйте выполнить /start."
+            "Попробуй выполнить /start ещё раз."
         )
         return
 
@@ -177,22 +143,19 @@ async def accept_rules_handler(
 
     accept_rules(user.id)
 
-    await state.set_state(
-        RegistrationState.waiting_for_city
-    )
+    await state.clear()
 
     await message.answer(
-        "✅ <b>Правила приняты.</b>\n\n"
-        "Теперь укажите ваш город.\n\n"
-        "Например: Калининград",
-        reply_markup=back_to_main_keyboard(),
+        "✅ <b>Правила приняты!</b>\n\n"
+        "Теперь можешь создать объявление и "
+        "искать игры для обмена.",
+        reply_markup=main_menu_keyboard(),
     )
 
 
-# =========================================================
-# Главное меню
-# ВАЖНО: этот обработчик находится выше FSM-обработчика города
-# =========================================================
+# ============================================================
+# MAIN MENU
+# ============================================================
 
 @router.message(F.text == "🏠 Главное меню")
 async def main_menu_handler(
@@ -204,7 +167,6 @@ async def main_menu_handler(
     if user is None:
         return
 
-    # Самое главное — полностью сбрасываем текущее действие
     await state.clear()
 
     existing_user = get_user(user.id)
@@ -212,7 +174,7 @@ async def main_menu_handler(
     if not existing_user:
         await message.answer(
             "❌ Профиль не найден.\n\n"
-            "Выполните /start."
+            "Выполни /start."
         )
         return
 
@@ -230,199 +192,8 @@ async def main_menu_handler(
         )
         return
 
-    if not existing_user["city"]:
-        await state.set_state(
-            RegistrationState.waiting_for_city
-        )
-
-        await message.answer(
-            "📍 Сначала укажите ваш город.",
-            reply_markup=back_to_main_keyboard(),
-        )
-        return
-
     await message.answer(
         "🎮 <b>Главное меню</b>\n\n"
-        "Выберите нужное действие:",
+        "Выбери действие:",
         reply_markup=main_menu_keyboard(),
-    )
-
-
-# =========================================================
-# Регистрация города
-# =========================================================
-
-@router.message(RegistrationState.waiting_for_city)
-async def city_handler(
-    message: Message,
-    state: FSMContext,
-):
-    user = message.from_user
-
-    if user is None:
-        return
-
-    city = (message.text or "").strip()
-
-    if len(city) < 2:
-        await message.answer(
-            "❌ Слишком короткое название города.\n\n"
-            "Попробуйте ещё раз.",
-            reply_markup=back_to_main_keyboard(),
-        )
-        return
-
-    if len(city) > 100:
-        await message.answer(
-            "❌ Название города слишком длинное.\n\n"
-            "Попробуйте ещё раз.",
-            reply_markup=back_to_main_keyboard(),
-        )
-        return
-
-    set_city(user.id, city)
-
-    await state.clear()
-
-    await message.answer(
-        f"📍 Город сохранён: <b>{escape(city)}</b>\n\n"
-        "🎮 <b>Регистрация завершена!</b>\n\n"
-        "Теперь можно добавлять игры и искать обмены.",
-        reply_markup=main_menu_keyboard(),
-    )
-
-
-# =========================================================
-# ⭐ МОЙ ПРОФИЛЬ
-# =========================================================
-
-@router.message(F.text == "⭐ Мой профиль")
-async def profile_handler(message: Message):
-    user = message.from_user
-
-    if user is None:
-        return
-
-    profile = get_user(user.id)
-
-    if not profile:
-        await message.answer(
-            "❌ Профиль не найден.\n\n"
-            "Выполните /start."
-        )
-        return
-
-    if profile["is_blocked"]:
-        await message.answer(
-            "🚫 <b>Ваш аккаунт заблокирован.</b>"
-        )
-        return
-
-    first_name = escape(
-        profile["first_name"] or "Пользователь"
-    )
-
-    city = escape(
-        profile["city"] or "Не указан"
-    )
-
-    if profile["username"]:
-        username = "@" + escape(profile["username"])
-    else:
-        username = "Не указан"
-
-    rating = profile["rating"] or 5.0
-    reviews_count = profile["reviews_count"] or 0
-    completed_deals = profile["completed_deals"] or 0
-
-    await message.answer(
-        "⭐ <b>МОЙ ПРОФИЛЬ</b>\n\n"
-        f"👤 Имя: <b>{first_name}</b>\n"
-        f"🔗 Username: <b>{username}</b>\n"
-        f"📍 Город: <b>{city}</b>\n\n"
-        f"⭐ Рейтинг: <b>{rating:.1f}/5.0</b>\n"
-        f"💬 Отзывов: <b>{reviews_count}</b>\n"
-        f"🤝 Завершённых обменов: <b>{completed_deals}</b>\n\n"
-        "💡 Хорошая репутация помогает другим "
-        "пользователям доверять вам при обмене.",
-        reply_markup=back_to_main_keyboard(),
-    )
-
-
-# =========================================================
-# 🔔 УВЕДОМЛЕНИЯ
-# =========================================================
-
-@router.message(F.text == "🔔 Уведомления")
-async def notifications_handler(message: Message):
-    user = message.from_user
-
-    if user is None:
-        return
-
-    profile = get_user(user.id)
-
-    if not profile:
-        await message.answer(
-            "❌ Профиль не найден.\n\n"
-            "Выполните /start."
-        )
-        return
-
-    if profile["is_blocked"]:
-        await message.answer(
-            "🚫 <b>Ваш аккаунт заблокирован.</b>"
-        )
-        return
-
-    # Пока таблица уведомлений уже существует в БД,
-    # полноценный вывод подключим следующим большим блоком.
-    await message.answer(
-        "🔔 <b>Уведомления</b>\n\n"
-        "Пока новых уведомлений нет.\n\n"
-        "Здесь в будущем будут появляться:\n"
-        "❤️ новые лайки\n"
-        "🎯 новые совпадения\n"
-        "💌 предложения обмена\n"
-        "🤝 изменения сделок\n"
-        "⭐ отзывы",
-        reply_markup=back_to_main_keyboard(),
-    )
-
-
-# =========================================================
-# ⚙️ НАСТРОЙКИ
-# =========================================================
-
-@router.message(F.text == "⚙️ Настройки")
-async def settings_handler(message: Message):
-    user = message.from_user
-
-    if user is None:
-        return
-
-    profile = get_user(user.id)
-
-    if not profile:
-        await message.answer(
-            "❌ Профиль не найден.\n\n"
-            "Выполните /start."
-        )
-        return
-
-    if profile["is_blocked"]:
-        await message.answer(
-            "🚫 <b>Ваш аккаунт заблокирован.</b>"
-        )
-        return
-
-    await message.answer(
-        "⚙️ <b>НАСТРОЙКИ</b>\n\n"
-        "🔔 Уведомления — скоро\n"
-        "📍 Изменение города — скоро\n"
-        "👤 Профиль — скоро\n"
-        "🚫 Чёрный список — скоро\n\n"
-        "Основные настройки подключим следующим "
-        "большим блоком.",
-        reply_markup=back_to_main_keyboard(),
     )
