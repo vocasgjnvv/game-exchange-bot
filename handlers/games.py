@@ -124,7 +124,49 @@ def build_preview(data: dict) -> str:
 # ============================================================
 
 @router.message(F.text == "🔍 Найти игру")
-async def find_game_start(message: Message, state: FSMContext):
+async def find_game_start(
+    message: Message,
+    state: FSMContext,
+):
+    user = get_user(
+        message.from_user.id
+    )
+
+    if not user:
+        await message.answer(
+            "❌ Пользователь не найден.\n\n"
+            "Выполни /start."
+        )
+        return
+
+    with __import__("database.db", fromlist=["get_connection"]).get_connection() as db:
+        active_offer = db.execute(
+            """
+            SELECT id
+            FROM offers
+            WHERE user_id = ?
+              AND status = 'active'
+            LIMIT 1
+            """,
+            (user["id"],),
+        ).fetchone()
+
+    if active_offer:
+        await message.answer(
+            "🔎 У тебя уже есть активное объявление.\n\n"
+            "Продолжи поиск игр для обмена."
+        )
+
+        # Передаём управление в поиск объявлений.
+        # Сам поиск находится в handlers/exchange.py.
+        from handlers.exchange import start_search
+
+        await start_search(
+            message,
+            state,
+        )
+        return
+
     await state.clear()
 
     await state.set_state(
@@ -136,7 +178,6 @@ async def find_game_start(message: Message, state: FSMContext):
         "Сначала выбери, где искать игры:",
         reply_markup=search_location_keyboard(),
     )
-
 
 # ============================================================
 # SEARCH LOCATION
