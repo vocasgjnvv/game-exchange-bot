@@ -395,3 +395,307 @@ async def like_offer(
         state,
         user["id"],
     )
+@router.message(
+    ExchangeStates.browsing,
+    F.text == "👎",
+)
+async def dislike_offer(
+    message: Message,
+    state: FSMContext,
+):
+    user = get_user(message.from_user.id)
+
+    if not user:
+        return
+
+    data = await state.get_data()
+    offer_id = data.get("current_offer_id")
+
+    if not offer_id:
+        return
+
+    save_like(
+        from_user_id=user["id"],
+        offer_id=offer_id,
+        action="dislike",
+    )
+
+    await show_next_offer(
+        message,
+        state,
+        user["id"],
+    )
+
+
+@router.message(
+    ExchangeStates.browsing,
+    F.text == "✉️",
+)
+async def start_message(
+    message: Message,
+    state: FSMContext,
+):
+    data = await state.get_data()
+    offer_id = data.get("current_offer_id")
+
+    if not offer_id:
+        return
+
+    await state.set_state(
+        ExchangeStates.waiting_for_message
+    )
+
+    await message.answer(
+        "💬 <b>Напишите сообщение владельцу:</b>\n\n"
+        "Например:\n"
+        "<i>Привет! Готов обменяться.</i>\n\n"
+        "Отправка сообщения автоматически означает ❤️."
+    )
+
+
+@router.message(
+    ExchangeStates.waiting_for_message
+)
+async def send_initial_message(
+    message: Message,
+    state: FSMContext,
+    bot: Bot,
+):
+    if not message.text:
+        await message.answer(
+            "✍️ Напиши сообщение текстом."
+        )
+        return
+
+    user = get_user(message.from_user.id)
+
+    if not user:
+        await state.clear()
+        return
+
+    data = await state.get_data()
+    offer_id = data.get("current_offer_id")
+
+    if not offer_id:
+        await state.clear()
+        return
+
+    liker_offer = get_active_user_offer(
+        user["id"]
+    )
+
+    if not liker_offer:
+        await state.clear()
+        await message.answer(
+            "❌ Твоё объявление не найдено.",
+            reply_markup=main_menu_keyboard(),
+        )
+        return
+
+    result = save_like(
+        from_user_id=user["id"],
+        offer_id=offer_id,
+        action="like",
+        message_text=message.text,
+    )
+
+    if not result:
+        await state.clear()
+        await message.answer(
+            "❌ Не удалось отправить сообщение.",
+            reply_markup=main_menu_keyboard(),
+        )
+        return
+
+    if result["type"] == "mutual":
+        partner_id = result["user_id"]
+
+        await message.answer(
+            "🎉 <b>Взаимный лайк!</b>\n\n"
+            "Вы понравились друг другу.\n\n"
+            f"{contact_text(partner_id)}",
+            reply_markup=main_menu_keyboard(),
+        )
+
+        partner = get_user_contact(partner_id)
+
+        if partner:
+            try:
+                await bot.send_message(
+                    partner["telegram_id"],
+                    "🎉 <b>Взаимный лайк!</b>\n\n"
+                    "Вы понравились друг другу.\n\n"
+                    f"{contact_text(user['id'])}",
+                    reply_markup=main_menu_keyboard(),
+                )
+            except Exception:
+                pass
+
+        await state.clear()
+        return
+
+    owner_id = result["user_id"]
+
+    create_notification(
+        user_id=owner_id,
+        notification_type="like_message",
+        payload=(
+            f"{user['id']}:{liker_offer['id']}:{offer_id}"
+        ),
+    )
+
+    owner = get_user_contact(owner_id)
+
+    if owner:
+        try:
+            await bot.send_message(
+                owner["telegram_id"],
+                "❤️ <b>Вашей игрой заинтересовались!</b>\n\n"
+                f"💬 «{escape(message.text)}»\n\n"
+                "Нажмите «Посмотреть».",
+                reply_markup=InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [
+                            InlineKeyboardButton(
+                                text="Посмотреть",
+                                callback_data=(
+                                    f"interest:"
+                                    f"{user['id']}:"
+                                    f"{liker_offer['id']}:"
+                                    f"{offer_id}"
+                                ),
+                            )
+                        ]
+                    ]
+                ),
+            )
+        except Exception:
+            pass
+
+    await state.clear()
+
+    await message.answer(
+        "✅ <b>Сообщение отправлено.</b>\n\n"
+        "Если владелец поставит ❤️ — "
+        "контакт автоматически откроется вам обоим.",
+        reply_markup=main_menu_keyboard(),
+    )
+
+
+@router.callback_query(
+    F.data.startswith("interest:")
+)
+async def view_interest(
+    callback: CallbackQuery,
+    bot: Bot,
+):
+    try:
+        _, liker_id, liker_offer_id, owner_offer_id = (
+            callback.data.split(":")
+        )
+
+        liker_id = int(liker_id)
+        liker_offer_id = int(liker_offer_id)
+        owner_offer_id = int(owner_offer_id)
+
+    except (ValueError, AttributeError):
+        await callback.answer(
+            "❌ Некорректное уведомление.",
+            show_alert=True,
+        )
+        return
+
+    owner = get_user(callback.from_user.id)
+
+    if not owner:
+        await callback.answer(
+            "❌ Пользователь не найден.",
+            show_alert=True,
+        )
+        return
+
+    if owner_offer_id != get_active_user_offer(
+        owner["id"]
+    )["id"]:
+        await callback.answer(
+            "❌ Объявление больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    liker_offer = get_offer(liker_offer_id)
+
+    if not liker_offer:
+        await callback.answer(
+            "❌ Объявление пользователя больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    await callback.answer()
+
+    await send_offer_photos(
+        bot=bot,
+        chat_id=callback.from_user.id,
+        offer_id=liker_offer_id,
+    )
+
+    text = (
+        "❤️ <b>Пользователь заинтересовался "
+        "вашей игрой!</b>\n\n"
+        f"{build_offer_text(liker_offer)}"
+    )
+
+    with get_connection() as db:
+        like_row = db.execute(
+            """
+            SELECT message_text
+            FROM likes
+            WHERE from_user_id = ?
+              AND to_user_id = ?
+              AND offer_id = ?
+              AND action = 'like'
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (
+                liker_id,
+                owner["id"],
+                owner_offer_id,
+            ),
+        ).fetchone()
+
+    if like_row and like_row["message_text"]:
+        text += (
+            "\n💬 <b>Сообщение:</b>\n"
+            f"«{escape(like_row['message_text'])}»"
+        )
+
+    await bot.send_message(
+        callback.from_user.id,
+        text,
+        reply_markup=InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="❤️",
+                        callback_data=(
+                            f"interest_like:"
+                            f"{liker_id}:"
+                            f"{liker_offer_id}:"
+                            f"{owner_offer_id}"
+                        ),
+                    ),
+                    InlineKeyboardButton(
+                        text="👎",
+                        callback_data=(
+                            f"interest_dislike:"
+                            f"{liker_id}:"
+                            f"{liker_offer_id}:"
+                            f"{owner_offer_id}"
+                        ),
+                    ),
+                ]
+            ]
+        ),
+    )
