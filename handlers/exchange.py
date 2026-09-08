@@ -279,10 +279,17 @@ async def start_search(
 
     await state.clear()
 
-    await state.update_data(
-        platform=own_offer["platform"],
-        city=own_offer["search_location"],
-    )
+     search_location = own_offer["search_location"]
+
+city = None
+
+if search_location not in ("all_russia", "Россия"):
+    city = search_location
+
+await state.update_data(
+    platform=own_offer["platform"],
+    city=city,
+)
 
     await show_next_offer(
         message,
