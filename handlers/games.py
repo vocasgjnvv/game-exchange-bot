@@ -130,25 +130,23 @@ def build_preview(data: dict) -> str:
     AddGameState.waiting_for_search_location,
     F.text == "🇷🇺 Вся Россия",
 )
-async def search_all_russia(message: Message, state: FSMContext):
+async def search_all_russia(
+    message: Message,
+    state: FSMContext,
+):
     await state.update_data(
         search_location="Россия",
-        city="Россия",
-    )
-
-    await save_draft(
-        message,
-        state,
-        "waiting_for_platform",
     )
 
     await state.set_state(
-        AddGameState.waiting_for_platform
+        AddGameState.waiting_for_city
     )
 
     await message.answer(
-        "🎮 <b>Выбери платформу</b>",
-        reply_markup=platform_keyboard(),
+        "🏙 <b>В каком городе находится твоя игра?</b>\n\n"
+        "Напиши название города.\n"
+        "Он будет отображаться в объявлении, "
+        "но поиск останется по всей России."
     )
 
 
