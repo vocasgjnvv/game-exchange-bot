@@ -182,8 +182,18 @@ async def choose_city(message: Message, state: FSMContext):
         )
         return
 
+    data = await state.get_data()
+
+    # Если выбрана «Вся Россия»,
+    # сохраняем поиск по всей России,
+    # но отдельно запоминаем реальный город игры.
+    if data.get("search_location") == "Россия":
+        search_location = "Россия"
+    else:
+        search_location = city
+
     await state.update_data(
-        search_location=city,
+        search_location=search_location,
         city=city,
     )
 
