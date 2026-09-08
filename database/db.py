@@ -118,6 +118,20 @@ def init_db():
             )
         """)
 
+        try:
+
+            db.execute("""
+
+                ALTER TABLE likes
+
+                ADD COLUMN message_text TEXT
+
+            """)
+
+        except sqlite3.OperationalError:
+
+            pass
+
         # Для уже существующей таблицы likes
         try:
             db.execute("""
