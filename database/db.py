@@ -1,16 +1,20 @@
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent
-DB_PATH = BASE_DIR / "game_exchange.db"
+DB_PATH = Path("game_exchange.db")
 
 
+@contextmanager
 def get_connection():
-    connection = sqlite3.connect(DB_PATH)
-    connection.row_factory = sqlite3.Row
-    connection.execute("PRAGMA foreign_keys = ON")
-    return connection
+    db = sqlite3.connect(DB_PATH)
+    db.row_factory = sqlite3.Row
+
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def init_db():
@@ -24,15 +28,46 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 telegram_id INTEGER UNIQUE NOT NULL,
                 username TEXT,
-                first_name TEXT NOT NULL,
+                first_name TEXT,
                 city TEXT,
-                rating REAL NOT NULL DEFAULT 5.0,
-                reviews_count INTEGER NOT NULL DEFAULT 0,
-                completed_deals INTEGER NOT NULL DEFAULT 0,
-                rules_accepted INTEGER NOT NULL DEFAULT 0,
-                is_blocked INTEGER NOT NULL DEFAULT 0,
+
+                rating REAL DEFAULT 0,
+                reviews_count INTEGER DEFAULT 0,
+                deals_count INTEGER DEFAULT 0,
+
+                rules_accepted INTEGER DEFAULT 0,
+                is_blocked INTEGER DEFAULT 0,
+
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                blocked_at TEXT
+            )
+        """)
+
+        # =========================
+        # GAME DRAFTS
+        # =========================
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS game_drafts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER UNIQUE NOT NULL,
+
+                game_title TEXT,
+                platform TEXT,
+                format TEXT,
+                condition TEXT,
+                description TEXT,
+
+                search_location TEXT,
+                step TEXT,
+
+                photos TEXT,
+
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                FOREIGN KEY (user_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE
             )
         """)
 
@@ -42,43 +77,43 @@ def init_db():
         db.execute("""
             CREATE TABLE IF NOT EXISTS games (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                title TEXT NOT NULL,
-                normalized_title TEXT NOT NULL UNIQUE
+                title TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
             )
         """)
 
         # =========================
-        # OFFERS / LISTINGS
+        # OFFERS
         # =========================
         db.execute("""
             CREATE TABLE IF NOT EXISTS offers (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+
                 user_id INTEGER NOT NULL,
                 game_id INTEGER NOT NULL,
+
                 platform TEXT NOT NULL,
                 format TEXT NOT NULL,
-                condition TEXT,
+                condition TEXT NOT NULL,
+
                 key_region TEXT,
                 description TEXT,
+
                 city TEXT NOT NULL,
                 search_location TEXT NOT NULL DEFAULT 'all_russia',
+
                 status TEXT NOT NULL DEFAULT 'active',
+
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (game_id) REFERENCES games(id)
+                FOREIGN KEY (user_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE,
+
+                FOREIGN KEY (game_id)
+                    REFERENCES games(id)
             )
         """)
-
-        # Добавляем поле search_location в старую БД,
-        # если таблица offers уже существовала.
-        try:
-            db.execute("""
-                ALTER TABLE offers
-                ADD COLUMN search_location TEXT NOT NULL DEFAULT 'all_russia'
-            """)
-        except sqlite3.OperationalError:
-            pass
 
         # =========================
         # PHOTOS
@@ -97,51 +132,6 @@ def init_db():
         """)
 
         # =========================
-        # LIKES / INTERESTS
-        # =========================
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS likes (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                from_user_id INTEGER NOT NULL,
-                to_user_id INTEGER NOT NULL,
-                offer_id INTEGER NOT NULL,
-                from_offer_id INTEGER,
-                action TEXT NOT NULL,
-                message_text TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-                UNIQUE(from_user_id, offer_id),
-
-                FOREIGN KEY (from_user_id) REFERENCES users(id),
-                FOREIGN KEY (to_user_id) REFERENCES users(id),
-                FOREIGN KEY (offer_id) REFERENCES offers(id)
-            )
-        """)
-
-        try:
-
-            db.execute("""
-
-                ALTER TABLE likes
-
-                ADD COLUMN message_text TEXT
-
-            """)
-
-        except sqlite3.OperationalError:
-
-            pass
-
-        # Для уже существующей таблицы likes
-        try:
-            db.execute("""
-                ALTER TABLE likes
-                ADD COLUMN message_text TEXT
-            """)
-        except sqlite3.OperationalError:
-            pass
-
-        # =========================
         # INITIAL MESSAGES
         # =========================
         db.execute("""
@@ -153,11 +143,72 @@ def init_db():
                 text TEXT NOT NULL,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-                FOREIGN KEY (from_user_id) REFERENCES users(id),
-                FOREIGN KEY (to_user_id) REFERENCES users(id),
-                FOREIGN KEY (offer_id) REFERENCES offers(id)
+                FOREIGN KEY (from_user_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE,
+
+                FOREIGN KEY (to_user_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE,
+
+                FOREIGN KEY (offer_id)
+                    REFERENCES offers(id)
+                    ON DELETE CASCADE
             )
         """)
+
+        # =========================
+        # LIKES / INTERESTS
+        # =========================
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS likes (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+                from_user_id INTEGER NOT NULL,
+                to_user_id INTEGER NOT NULL,
+
+                offer_id INTEGER NOT NULL,
+                from_offer_id INTEGER,
+
+                action TEXT NOT NULL,
+                message_text TEXT,
+
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+                UNIQUE(from_user_id, offer_id),
+
+                FOREIGN KEY (from_user_id)
+                    REFERENCES users(id),
+
+                FOREIGN KEY (to_user_id)
+                    REFERENCES users(id),
+
+                FOREIGN KEY (offer_id)
+                    REFERENCES offers(id)
+            )
+        """)
+
+        # =========================
+        # MIGRATION: message_text
+        # =========================
+        try:
+            db.execute("""
+                ALTER TABLE likes
+                ADD COLUMN message_text TEXT
+            """)
+        except sqlite3.OperationalError:
+            pass
+
+        # =========================
+        # MIGRATION: from_offer_id
+        # =========================
+        try:
+            db.execute("""
+                ALTER TABLE likes
+                ADD COLUMN from_offer_id INTEGER
+            """)
+        except sqlite3.OperationalError:
+            pass
 
         # =========================
         # MATCHES
@@ -165,189 +216,39 @@ def init_db():
         db.execute("""
             CREATE TABLE IF NOT EXISTS matches (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+
                 user1_id INTEGER NOT NULL,
                 user2_id INTEGER NOT NULL,
+
                 offer1_id INTEGER NOT NULL,
                 offer2_id INTEGER NOT NULL,
+
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-                UNIQUE(user1_id, user2_id, offer1_id, offer2_id),
+                UNIQUE(
+                    user1_id,
+                    user2_id,
+                    offer1_id,
+                    offer2_id
+                ),
 
-                FOREIGN KEY (user1_id) REFERENCES users(id),
-                FOREIGN KEY (user2_id) REFERENCES users(id),
-                FOREIGN KEY (offer1_id) REFERENCES offers(id),
-                FOREIGN KEY (offer2_id) REFERENCES offers(id)
+                FOREIGN KEY (user1_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE,
+
+                FOREIGN KEY (user2_id)
+                    REFERENCES users(id)
+                    ON DELETE CASCADE,
+
+                FOREIGN KEY (offer1_id)
+                    REFERENCES offers(id)
+                    ON DELETE CASCADE,
+
+                FOREIGN KEY (offer2_id)
+                    REFERENCES offers(id)
+                    ON DELETE CASCADE
             )
         """)
-
-        # =========================
-        # NOTIFICATIONS
-        # =========================
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS notifications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                type TEXT NOT NULL,
-                payload TEXT,
-                is_read INTEGER NOT NULL DEFAULT 0,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        """)
-
-        # =========================
-        # OLD / COMPATIBILITY TABLES
-        # Пока оставляем, чтобы старая БД
-        # не ломалась.
-        # =========================
-
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS wanted_games (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                game_id INTEGER NOT NULL,
-                platform TEXT NOT NULL,
-                format TEXT NOT NULL,
-                priority INTEGER NOT NULL DEFAULT 1,
-
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (game_id) REFERENCES games(id)
-            )
-        """)
-
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS deals (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                public_id TEXT UNIQUE NOT NULL,
-                user1_id INTEGER NOT NULL,
-                user2_id INTEGER NOT NULL,
-                offer1_id INTEGER NOT NULL,
-                offer2_id INTEGER NOT NULL,
-                status TEXT NOT NULL DEFAULT 'active',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-                closed_at TEXT,
-
-                FOREIGN KEY (user1_id) REFERENCES users(id),
-                FOREIGN KEY (user2_id) REFERENCES users(id),
-                FOREIGN KEY (offer1_id) REFERENCES offers(id),
-                FOREIGN KEY (offer2_id) REFERENCES offers(id)
-            )
-        """)
-
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS deal_messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                deal_id INTEGER NOT NULL,
-                sender_user_id INTEGER NOT NULL,
-                text TEXT NOT NULL,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-                FOREIGN KEY (deal_id) REFERENCES deals(id),
-                FOREIGN KEY (sender_user_id) REFERENCES users(id)
-            )
-        """)
-
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS reviews (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                deal_id INTEGER NOT NULL,
-                from_user_id INTEGER NOT NULL,
-                to_user_id INTEGER NOT NULL,
-                rating INTEGER NOT NULL CHECK(rating BETWEEN 1 AND 5),
-                text TEXT,
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-                UNIQUE(deal_id, from_user_id),
-
-                FOREIGN KEY (deal_id) REFERENCES deals(id),
-                FOREIGN KEY (from_user_id) REFERENCES users(id),
-                FOREIGN KEY (to_user_id) REFERENCES users(id)
-            )
-        """)
-
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS reports (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                reporter_user_id INTEGER NOT NULL,
-                reported_user_id INTEGER NOT NULL,
-                deal_id INTEGER,
-                reason TEXT NOT NULL,
-                description TEXT,
-                status TEXT NOT NULL DEFAULT 'new',
-                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-                FOREIGN KEY (reporter_user_id) REFERENCES users(id),
-                FOREIGN KEY (reported_user_id) REFERENCES users(id),
-                FOREIGN KEY (deal_id) REFERENCES deals(id)
-            )
-        """)
-
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS favorites (
-                user_id INTEGER NOT NULL,
-                offer_id INTEGER NOT NULL,
-
-                PRIMARY KEY (user_id, offer_id),
-
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (offer_id) REFERENCES offers(id)
-            )
-        """)
-
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS blocks (
-                user_id INTEGER NOT NULL,
-                blocked_user_id INTEGER NOT NULL,
-
-                PRIMARY KEY (user_id, blocked_user_id),
-
-                FOREIGN KEY (user_id) REFERENCES users(id),
-                FOREIGN KEY (blocked_user_id) REFERENCES users(id)
-            )
-        """)
-
-        # =========================
-        # GAME DRAFTS
-        # =========================
-        db.execute("""
-            CREATE TABLE IF NOT EXISTS game_drafts (
-                user_id INTEGER PRIMARY KEY,
-
-                title TEXT,
-                platform TEXT,
-                format TEXT,
-                condition TEXT,
-                key_region TEXT,
-                description TEXT,
-
-                search_location TEXT,
-                photos TEXT,
-
-                current_step TEXT NOT NULL,
-
-                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-
-                FOREIGN KEY (user_id) REFERENCES users(id)
-            )
-        """)
-
-        # Добавляем новые поля в старую таблицу drafts.
-        try:
-            db.execute("""
-                ALTER TABLE game_drafts
-                ADD COLUMN search_location TEXT
-            """)
-        except sqlite3.OperationalError:
-            pass
-
-        try:
-            db.execute("""
-                ALTER TABLE game_drafts
-                ADD COLUMN photos TEXT
-            """)
-        except sqlite3.OperationalError:
-            pass
 
         db.commit()
 
@@ -370,14 +271,18 @@ def get_user(telegram_id: int):
 
 def create_user(
     telegram_id: int,
-    username: str | None,
-    first_name: str
+    username: str | None = None,
+    first_name: str | None = None
 ):
     with get_connection() as db:
         db.execute(
             """
             INSERT OR IGNORE INTO users
-            (telegram_id, username, first_name)
+            (
+                telegram_id,
+                username,
+                first_name
+            )
             VALUES (?, ?, ?)
             """,
             (
@@ -386,63 +291,71 @@ def create_user(
                 first_name
             )
         )
-        db.commit()
 
-
-def accept_rules(telegram_id: int):
-    with get_connection() as db:
         db.execute(
             """
             UPDATE users
-            SET rules_accepted = 1,
-                updated_at = CURRENT_TIMESTAMP
+            SET
+                username = ?,
+                first_name = ?
+            WHERE telegram_id = ?
+            """,
+            (
+                username,
+                first_name,
+                telegram_id
+            )
+        )
+
+        db.commit()
+
+        return db.execute(
+            """
+            SELECT *
+            FROM users
             WHERE telegram_id = ?
             """,
             (telegram_id,)
-        )
-        db.commit()
+        ).fetchone()
 
 
 # ============================================================
 # GAMES
 # ============================================================
 
-def get_or_create_game(title: str) -> int:
-    title = title.strip()
-    normalized_title = title.lower()
-
+def get_or_create_game(title: str):
     with get_connection() as db:
 
         game = db.execute(
             """
-            SELECT id
+            SELECT *
             FROM games
-            WHERE normalized_title = ?
+            WHERE title = ?
             """,
-            (normalized_title,)
+            (title,)
         ).fetchone()
 
         if game:
-            return game["id"]
+            return game
 
         cursor = db.execute(
             """
-            INSERT INTO games
-            (
-                title,
-                normalized_title
-            )
-            VALUES (?, ?)
+            INSERT INTO games (title)
+            VALUES (?)
             """,
-            (
-                title,
-                normalized_title
-            )
+            (title,)
         )
 
         db.commit()
 
-        return cursor.lastrowid
+        return db.execute(
+            """
+            SELECT *
+            FROM games
+            WHERE id = ?
+            """,
+            (cursor.lastrowid,)
+        ).fetchone()
 
 
 # ============================================================
@@ -454,18 +367,18 @@ def create_offer(
     game_id: int,
     platform: str,
     format_type: str,
-    condition: str | None = None,
+    condition: str,
     key_region: str | None = None,
     description: str | None = None,
     city: str | None = None,
-    search_location: str = "all_russia",
-) -> int:
-
+    search_location: str = "all_russia"
+):
     with get_connection() as db:
 
         cursor = db.execute(
             """
-            INSERT INTO offers (
+            INSERT INTO offers
+            (
                 user_id,
                 game_id,
                 platform,
@@ -474,10 +387,9 @@ def create_offer(
                 key_region,
                 description,
                 city,
-                search_location,
-                status
+                search_location
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active')
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 user_id,
@@ -487,7 +399,7 @@ def create_offer(
                 condition,
                 key_region,
                 description,
-                city or "Не указан",
+                city,
                 search_location
             )
         )
@@ -495,58 +407,6 @@ def create_offer(
         db.commit()
 
         return cursor.lastrowid
-
-
-def get_user_offers(user_id: int):
-    with get_connection() as db:
-        return db.execute(
-            """
-            SELECT
-                offers.id,
-                games.title,
-                offers.platform,
-                offers.format,
-                offers.condition,
-                offers.key_region,
-                offers.description,
-                offers.city,
-                offers.search_location,
-                offers.status
-            FROM offers
-            JOIN games
-                ON games.id = offers.game_id
-            WHERE offers.user_id = ?
-              AND offers.status = 'active'
-            ORDER BY offers.created_at DESC
-            """,
-            (user_id,)
-        ).fetchall()
-
-
-def delete_offer(
-    offer_id: int,
-    user_id: int
-) -> bool:
-
-    with get_connection() as db:
-
-        cursor = db.execute(
-            """
-            UPDATE offers
-            SET status = 'deleted'
-            WHERE id = ?
-              AND user_id = ?
-              AND status = 'active'
-            """,
-            (
-                offer_id,
-                user_id
-            )
-        )
-
-        db.commit()
-
-        return cursor.rowcount > 0
 
 
 # ============================================================
@@ -558,7 +418,6 @@ def add_listing_photo(
     file_id: str
 ):
     with get_connection() as db:
-
         db.execute(
             """
             INSERT INTO listing_photos
@@ -577,109 +436,124 @@ def add_listing_photo(
         db.commit()
 
 
-def get_listing_photos(offer_id: int):
-    with get_connection() as db:
-
-        return db.execute(
-            """
-            SELECT
-                id,
-                file_id
-            FROM listing_photos
-            WHERE offer_id = ?
-            ORDER BY id ASC
-            """,
-            (offer_id,)
-        ).fetchall()
-
-
 # ============================================================
-# FEED
+# DRAFTS
 # ============================================================
 
-def get_next_search_offers(
-    user_id: int,
-    platform: str,
-    city: str | None = None
+def save_game_draft(
+    telegram_id: int,
+    data: dict,
+    step: str
 ):
     with get_connection() as db:
 
-        query = """
-            SELECT
-                offers.id,
-                offers.user_id,
-                games.title,
-                offers.platform,
-                offers.format,
-                offers.condition,
-                offers.key_region,
-                offers.description,
-                offers.city,
-                offers.search_location,
-                users.first_name,
-                users.username
-            FROM offers
-            JOIN games
-                ON games.id = offers.game_id
-            JOIN users
-                ON users.id = offers.user_id
-            WHERE offers.status = 'active'
-              AND offers.user_id != ?
-              AND offers.platform = ?
-
-              AND NOT EXISTS (
-                  SELECT 1
-                  FROM likes
-                  WHERE likes.from_user_id = ?
-                    AND likes.offer_id = offers.id
-              )
-        """
-
-        params = [
-            user_id,
-            platform,
-            user_id
-        ]
-
-        # "Россия" = ВСЕ города России.
-        # Не фильтруем offers.city.
-        if city and city != "Россия":
-            query += """
-                ORDER BY
-                    CASE
-                        WHEN offers.city = ? THEN 0
-                        ELSE 1
-                    END,
-                    RANDOM()
+        user = db.execute(
             """
-            params.append(city)
+            SELECT id
+            FROM users
+            WHERE telegram_id = ?
+            """,
+            (telegram_id,)
+        ).fetchone()
 
-        else:
-            query += """
-                ORDER BY RANDOM()
+        if not user:
+            return
+
+        photos = data.get("photos")
+
+        if isinstance(photos, list):
+            photos = ",".join(photos)
+
+        db.execute(
             """
+            INSERT INTO game_drafts
+            (
+                user_id,
+                game_title,
+                platform,
+                format,
+                condition,
+                description,
+                search_location,
+                step,
+                photos,
+                updated_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
 
-        query += """
-            LIMIT 1
-        """
+            ON CONFLICT(user_id)
+            DO UPDATE SET
+                game_title = excluded.game_title,
+                platform = excluded.platform,
+                format = excluded.format,
+                condition = excluded.condition,
+                description = excluded.description,
+                search_location = excluded.search_location,
+                step = excluded.step,
+                photos = excluded.photos,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (
+                user["id"],
+                data.get("game_title"),
+                data.get("platform"),
+                data.get("format"),
+                data.get("condition"),
+                data.get("description"),
+                data.get("search_location"),
+                step,
+                photos
+            )
+        )
+
+        db.commit()
+
+
+def get_game_draft(telegram_id: int):
+    with get_connection() as db:
 
         return db.execute(
-            query,
-            params
+            """
+            SELECT
+                game_drafts.*
+            FROM game_drafts
+            JOIN users
+                ON users.id = game_drafts.user_id
+            WHERE users.telegram_id = ?
+            """,
+            (telegram_id,)
         ).fetchone()
 
 
+def delete_game_draft(telegram_id: int):
+    with get_connection() as db:
+
+        db.execute(
+            """
+            DELETE FROM game_drafts
+            WHERE user_id = (
+                SELECT id
+                FROM users
+                WHERE telegram_id = ?
+            )
+            """,
+            (telegram_id,)
+        )
+
+        db.commit()
+
+
 # ============================================================
-# LIKES / INTERESTS
+# LIKES
 # ============================================================
 
 def save_like(
     from_user_id: int,
     offer_id: int,
     action: str,
-    message_text: str | None = None
+    message_text: str | None = None,
+    from_offer_id: int | None = None
 ):
-
     with get_connection() as db:
 
         offer = db.execute(
@@ -699,11 +573,11 @@ def save_like(
 
         to_user_id = offer["user_id"]
 
-        # Нельзя лайкнуть самого себя.
+        # Нельзя поставить реакцию на собственное объявление
         if from_user_id == to_user_id:
             return None
 
-        # Проверяем существующее взаимодействие.
+        # Нельзя создать одинаковый интерес дважды
         existing = db.execute(
             """
             SELECT *
@@ -720,6 +594,29 @@ def save_like(
         if existing:
             return None
 
+        # Для лайка проверяем объявление самого пользователя
+        if action == "like":
+
+            if from_offer_id is None:
+                return None
+
+            source_offer = db.execute(
+                """
+                SELECT id
+                FROM offers
+                WHERE id = ?
+                  AND user_id = ?
+                  AND status = 'active'
+                """,
+                (
+                    from_offer_id,
+                    from_user_id
+                )
+            ).fetchone()
+
+            if not source_offer:
+                return None
+
         db.execute(
             """
             INSERT INTO likes
@@ -727,15 +624,17 @@ def save_like(
                 from_user_id,
                 to_user_id,
                 offer_id,
+                from_offer_id,
                 action,
                 message_text
             )
-            VALUES (?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?)
             """,
             (
                 from_user_id,
                 to_user_id,
                 offer_id,
+                from_offer_id,
                 action,
                 message_text
             )
@@ -743,38 +642,52 @@ def save_like(
 
         db.commit()
 
-        # Дизлайк — просто сохраняем.
+        # =========================
+        # DISLIKE
+        # =========================
         if action == "dislike":
+
             return {
                 "type": "dislike",
                 "user_id": to_user_id,
                 "offer_id": offer_id
             }
 
-        # Ищем взаимный лайк:
-        # владелец объявления ранее лайкнул
-        # объявление текущего пользователя.
+        # =========================
+        # CHECK MUTUAL LIKE
+        # =========================
         mutual = db.execute(
             """
             SELECT
                 likes.id,
-                likes.offer_id AS my_offer_id
+                likes.from_offer_id AS my_offer_id
             FROM likes
-            JOIN offers
-                ON offers.id = likes.offer_id
             WHERE likes.from_user_id = ?
               AND likes.to_user_id = ?
+              AND likes.offer_id = ?
               AND likes.action = 'like'
-              AND offers.status = 'active'
+              AND likes.from_offer_id IS NOT NULL
+              AND EXISTS (
+                  SELECT 1
+                  FROM offers
+                  WHERE offers.id = likes.from_offer_id
+                    AND offers.user_id = ?
+                    AND offers.status = 'active'
+              )
             ORDER BY likes.created_at DESC
             LIMIT 1
             """,
             (
                 to_user_id,
+                from_user_id,
+                from_offer_id,
                 from_user_id
             )
         ).fetchone()
 
+        # =========================
+        # MUTUAL LIKE
+        # =========================
         if mutual:
 
             existing_match = db.execute(
@@ -800,13 +713,13 @@ def save_like(
                 (
                     from_user_id,
                     to_user_id,
+                    from_offer_id,
                     offer_id,
-                    mutual["my_offer_id"],
 
                     to_user_id,
                     from_user_id,
-                    mutual["my_offer_id"],
-                    offer_id
+                    offer_id,
+                    from_offer_id
                 )
             ).fetchone()
 
@@ -826,8 +739,8 @@ def save_like(
                     (
                         from_user_id,
                         to_user_id,
-                        offer_id,
-                        mutual["my_offer_id"]
+                        from_offer_id,
+                        offer_id
                     )
                 )
 
@@ -843,240 +756,14 @@ def save_like(
                 "match_id": match_id,
                 "user_id": to_user_id,
                 "liked_offer_id": offer_id,
-                "my_offer_id": mutual["my_offer_id"]
+                "my_offer_id": from_offer_id
             }
 
+        # =========================
+        # NORMAL LIKE
+        # =========================
         return {
             "type": "like",
             "user_id": to_user_id,
             "liked_offer_id": offer_id
         }
-
-
-# ============================================================
-# NOTIFICATIONS
-# ============================================================
-
-def create_notification(
-    user_id: int,
-    notification_type: str,
-    payload: str | None = None
-):
-
-    with get_connection() as db:
-
-        cursor = db.execute(
-            """
-            INSERT INTO notifications
-            (
-                user_id,
-                type,
-                payload
-            )
-            VALUES (?, ?, ?)
-            """,
-            (
-                user_id,
-                notification_type,
-                payload
-            )
-        )
-
-        db.commit()
-
-        return cursor.lastrowid
-
-
-# ============================================================
-# DRAFTS
-# ============================================================
-
-def save_game_draft(
-    telegram_id: int,
-    data: dict,
-    step: str
-):
-
-    with get_connection() as db:
-
-        user = db.execute(
-            """
-            SELECT id
-            FROM users
-            WHERE telegram_id = ?
-            """,
-            (telegram_id,)
-        ).fetchone()
-
-        if not user:
-            return
-
-        photos = data.get("photos")
-
-        if isinstance(photos, list):
-            photos = "|".join(photos)
-
-        db.execute(
-            """
-            INSERT INTO game_drafts
-            (
-                user_id,
-                title,
-                platform,
-                format,
-                condition,
-                key_region,
-                description,
-                search_location,
-                photos,
-                current_step,
-                updated_at
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-
-            ON CONFLICT(user_id)
-            DO UPDATE SET
-                title = excluded.title,
-                platform = excluded.platform,
-                format = excluded.format,
-                condition = excluded.condition,
-                key_region = excluded.key_region,
-                description = excluded.description,
-                search_location = excluded.search_location,
-                photos = excluded.photos,
-                current_step = excluded.current_step,
-                updated_at = CURRENT_TIMESTAMP
-            """,
-            (
-                user["id"],
-                data.get("title"),
-                data.get("platform"),
-                data.get("format"),
-                data.get("condition"),
-                data.get("key_region"),
-                data.get("description"),
-                data.get("search_location"),
-                photos,
-                step
-            )
-        )
-
-        db.commit()
-
-
-def get_game_draft(telegram_id: int):
-
-    with get_connection() as db:
-
-        user = db.execute(
-            """
-            SELECT id
-            FROM users
-            WHERE telegram_id = ?
-            """,
-            (telegram_id,)
-        ).fetchone()
-
-        if not user:
-            return None
-
-        row = db.execute(
-            """
-            SELECT *
-            FROM game_drafts
-            WHERE user_id = ?
-            """,
-            (user["id"],)
-        ).fetchone()
-
-        return row
-
-
-def delete_game_draft(telegram_id: int):
-
-    with get_connection() as db:
-
-        user = db.execute(
-            """
-            SELECT id
-            FROM users
-            WHERE telegram_id = ?
-            """,
-            (telegram_id,)
-        ).fetchone()
-
-        if not user:
-            return
-
-        db.execute(
-            """
-            DELETE FROM game_drafts
-            WHERE user_id = ?
-            """,
-            (user["id"],)
-        )
-
-        db.commit()
-
-# ============================================================
-# COMPATIBILITY
-# ============================================================
-
-def set_city(telegram_id: int, city: str):
-    with get_connection() as db:
-        db.execute(
-            """
-            UPDATE users
-            SET city = ?,
-                updated_at = CURRENT_TIMESTAMP
-            WHERE telegram_id = ?
-            """,
-            (city.strip(), telegram_id)
-        )
-        db.commit()
-
-
-def search_offers(
-    user_id: int,
-    title: str | None = None,
-    platform: str | None = None
-):
-    with get_connection() as db:
-        query = """
-            SELECT
-                offers.id,
-                offers.user_id,
-                games.title,
-                offers.platform,
-                offers.format,
-                offers.condition,
-                offers.key_region,
-                offers.description,
-                offers.city,
-                offers.search_location
-            FROM offers
-            JOIN games
-                ON games.id = offers.game_id
-            WHERE offers.status = 'active'
-              AND offers.user_id != ?
-        """
-
-        params = [user_id]
-
-        if title:
-            query += """
-                AND games.normalized_title LIKE ?
-            """
-            params.append(f"%{title.strip().lower()}%")
-
-        if platform:
-            query += """
-                AND offers.platform = ?
-            """
-            params.append(platform)
-
-        query += """
-            ORDER BY offers.created_at DESC
-        """
-
-        return db.execute(query, params).fetchall()
