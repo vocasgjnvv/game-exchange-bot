@@ -587,7 +587,6 @@ def get_next_search_offers(
     platform: str,
     city: str | None = None
 ):
-
     with get_connection() as db:
 
         query = """
@@ -627,7 +626,9 @@ def get_next_search_offers(
             user_id
         ]
 
-        if city:
+        # "Россия" = ВСЕ города России.
+        # Не фильтруем offers.city.
+        if city and city != "Россия":
             query += """
                 ORDER BY
                     CASE
@@ -636,7 +637,6 @@ def get_next_search_offers(
                     END,
                     RANDOM()
             """
-
             params.append(city)
 
         else:
