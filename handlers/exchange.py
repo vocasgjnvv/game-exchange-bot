@@ -667,18 +667,99 @@ async def view_interest(
             "❌ Объявление пользователя больше недоступно.",
             show_alert=True,
         )
+        return 
+        
+@router.callback_query(
+    F.data.startswith("interest:")
+)
+async def view_interest(
+    callback: CallbackQuery,
+):
+    try:
+        _, liker_id, liker_offer_id, owner_offer_id = (
+            callback.data.split(":")
+        )
+
+        liker_id = int(liker_id)
+        liker_offer_id = int(liker_offer_id)
+        owner_offer_id = int(owner_offer_id)
+
+    except (ValueError, AttributeError):
+        await callback.answer("Ошибка данных.")
         return
 
-    save_like(
-        from_user_id=owner["id"],
-        offer_id=liker_offer_id,
-        action="dislike",
+    owner = get_user(
+        callback.from_user.id
     )
 
-    await callback.answer(
-        "👎 Не подходит."
+    if not owner:
+        await callback.answer(
+            "Пользователь не найден."
+        )
+        return
+
+    owner_offer = get_offer(
+        owner_offer_id
     )
 
-    await callback.message.edit_reply_markup(
-        reply_markup=None
+    if not owner_offer:
+        await callback.answer(
+            "Объявление больше недоступно."
+        )
+        return
+
+    if owner_offer["user_id"] != owner["id"]:
+        await callback.answer(
+            "Ошибка доступа."
+        )
+        return
+
+    liker_offer = get_offer(
+        liker_offer_id
     )
+
+    if not liker_offer:
+        await callback.answer(
+            "Объявление больше недоступно."
+        )
+        return
+
+    if liker_offer["user_id"] != liker_id:
+        await callback.answer(
+            "Ошибка данных."
+        )
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❤️ Взаимно",
+                    callback_data=(
+                        f"interest_like:"
+                        f"{liker_id}:"
+                        f"{liker_offer_id}:"
+                        f"{owner_offer_id}"
+                    ),
+                ),
+                InlineKeyboardButton(
+                    text="👎 Не подходит",
+                    callback_data=(
+                        f"interest_dislike:"
+                        f"{liker_id}:"
+                        f"{liker_offer_id}:"
+                        f"{owner_offer_id}"
+                    ),
+                ),
+            ]
+        ]
+    )
+
+    await callback.message.answer(
+        "❤️ <b>Вам поставили лайк!</b>\n\n"
+        f"{build_offer_text(liker_offer)}\n\n"
+        "Выберите действие:",
+        reply_markup=keyboard,
+    )
+
+    await callback.answer()
