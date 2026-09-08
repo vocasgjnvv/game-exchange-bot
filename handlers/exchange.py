@@ -296,6 +296,10 @@ async def start_search(
         state,
         user["id"],
     )
+@router.message(
+    ExchangeStates.browsing,
+    F.text == "❤️",
+)
 async def like_offer(
     message: Message,
     state: FSMContext,
