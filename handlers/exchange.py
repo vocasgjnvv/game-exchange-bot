@@ -279,29 +279,23 @@ async def start_search(
 
     await state.clear()
 
-     search_location = own_offer["search_location"]
+    search_location = own_offer["search_location"]
 
-city = None
+    city = None
 
-if search_location not in ("all_russia", "Россия"):
-    city = search_location
+    if search_location not in ("all_russia", "Россия"):
+        city = search_location
 
-await state.update_data(
-    platform=own_offer["platform"],
-    city=city,
-)
+    await state.update_data(
+        platform=own_offer["platform"],
+        city=city,
+    )
 
     await show_next_offer(
         message,
         state,
         user["id"],
     )
-
-
-@router.message(
-    ExchangeStates.browsing,
-    F.text == "❤️",
-)
 async def like_offer(
     message: Message,
     state: FSMContext,
