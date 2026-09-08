@@ -583,7 +583,7 @@ async def publish_listing(
             condition=condition,
             key_region=None,
             description=description,
-            city=search_location,
+            city=data.get("city"),
             search_location=search_location,
         )
 
