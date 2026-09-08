@@ -105,7 +105,7 @@ def init_db():
                 from_user_id INTEGER NOT NULL,
                 to_user_id INTEGER NOT NULL,
                 offer_id INTEGER NOT NULL,
-                 from_offer_id INTEGER,
+                from_offer_id INTEGER,
                 action TEXT NOT NULL,
                 message_text TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
