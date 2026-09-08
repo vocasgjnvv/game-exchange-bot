@@ -607,68 +607,10 @@ async def send_initial_message(
     )
 
 
-@router.callback_query(
-    F.data.startswith("interest:")
-)
-async def view_interest(
-    callback: CallbackQuery,
-    bot: Bot,
-):
-    try:
-        _, liker_id, liker_offer_id, owner_offer_id = (
-            callback.data.split(":")
-        )
+# ============================================================
+# ПРОСМОТР ВХОДЯЩЕГО ЛАЙКА
+# ============================================================
 
-        liker_id = int(liker_id)
-        liker_offer_id = int(liker_offer_id)
-        owner_offer_id = int(owner_offer_id)
-
-    except (ValueError, AttributeError):
-        await callback.answer(
-            "❌ Некорректное уведомление.",
-            show_alert=True,
-        )
-        return
-
-    owner = get_user(
-        callback.from_user.id
-    )
-
-    if not owner:
-        await callback.answer(
-            "❌ Пользователь не найден.",
-            show_alert=True,
-        )
-        return
-
-    owner_offer = get_active_user_offer(
-        owner["id"]
-    )
-
-    if (
-        not owner_offer
-        or owner_offer["id"] != owner_offer_id
-    ):
-        await callback.answer(
-            "❌ Объявление больше недоступно.",
-            show_alert=True,
-        )
-        return
-
-    liker_offer = get_offer(
-        liker_offer_id
-    )
-
-    if (
-        not liker_offer
-        or liker_offer["user_id"] != liker_id
-    ):
-        await callback.answer(
-            "❌ Объявление пользователя больше недоступно.",
-            show_alert=True,
-        )
-        return 
-        
 @router.callback_query(
     F.data.startswith("interest:")
 )
@@ -685,7 +627,9 @@ async def view_interest(
         owner_offer_id = int(owner_offer_id)
 
     except (ValueError, AttributeError):
-        await callback.answer("Ошибка данных.")
+        await callback.answer(
+            "Ошибка данных."
+        )
         return
 
     owner = get_user(
@@ -763,3 +707,242 @@ async def view_interest(
     )
 
     await callback.answer()
+
+
+# ============================================================
+# ВЗАИМНЫЙ ЛАЙК
+# ============================================================
+
+@router.callback_query(
+    F.data.startswith("interest_like:")
+)
+async def interest_like(
+    callback: CallbackQuery,
+):
+    try:
+        _, liker_id, liker_offer_id, owner_offer_id = (
+            callback.data.split(":")
+        )
+
+        liker_id = int(liker_id)
+        liker_offer_id = int(liker_offer_id)
+        owner_offer_id = int(owner_offer_id)
+
+    except (ValueError, AttributeError):
+        await callback.answer(
+            "Ошибка данных.",
+            show_alert=True,
+        )
+        return
+
+    owner = get_user(
+        callback.from_user.id
+    )
+
+    if not owner:
+        await callback.answer(
+            "Пользователь не найден.",
+            show_alert=True,
+        )
+        return
+
+    owner_offer = get_offer(
+        owner_offer_id
+    )
+
+    if not owner_offer:
+        await callback.answer(
+            "Ваше объявление больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    if owner_offer["user_id"] != owner["id"]:
+        await callback.answer(
+            "Ошибка доступа.",
+            show_alert=True,
+        )
+        return
+
+    liker_offer = get_offer(
+        liker_offer_id
+    )
+
+    if not liker_offer:
+        await callback.answer(
+            "Объявление пользователя больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    if liker_offer["user_id"] != liker_id:
+        await callback.answer(
+            "Ошибка данных.",
+            show_alert=True,
+        )
+        return
+
+    result = save_like(
+        from_user_id=owner["id"],
+        offer_id=liker_offer_id,
+        action="like",
+    )
+
+    if not result:
+        await callback.answer(
+            "Этот интерес уже обработан.",
+            show_alert=True,
+        )
+        return
+
+    if result["type"] != "mutual":
+        await callback.answer(
+            "Лайк сохранён.",
+            show_alert=True,
+        )
+
+        try:
+            await callback.message.edit_reply_markup(
+                reply_markup=None
+            )
+        except Exception:
+            pass
+
+        return
+
+    partner_id = result["user_id"]
+
+    await callback.message.edit_reply_markup(
+        reply_markup=None
+    )
+
+    await callback.message.answer(
+        "🎉 <b>Взаимный лайк!</b>\n\n"
+        "Вы понравились друг другу.\n\n"
+        f"{contact_text(partner_id)}",
+        reply_markup=main_menu_keyboard(),
+    )
+
+    partner = get_user_contact(
+        partner_id
+    )
+
+    if partner:
+        try:
+            await callback.bot.send_message(
+                partner["telegram_id"],
+                "🎉 <b>Взаимный лайк!</b>\n\n"
+                "Вы понравились друг другу.\n\n"
+                f"{contact_text(owner['id'])}",
+                reply_markup=main_menu_keyboard(),
+            )
+        except Exception:
+            pass
+
+    await callback.answer(
+        "❤️ Взаимный лайк!"
+    )
+
+
+# ============================================================
+# ДИЗЛАЙК НА ВХОДЯЩИЙ ЛАЙК
+# ============================================================
+
+@router.callback_query(
+    F.data.startswith("interest_dislike:")
+)
+async def interest_dislike(
+    callback: CallbackQuery,
+):
+    try:
+        _, liker_id, liker_offer_id, owner_offer_id = (
+            callback.data.split(":")
+        )
+
+        liker_id = int(liker_id)
+        liker_offer_id = int(liker_offer_id)
+        owner_offer_id = int(owner_offer_id)
+
+    except (ValueError, AttributeError):
+        await callback.answer(
+            "Ошибка данных.",
+            show_alert=True,
+        )
+        return
+
+    owner = get_user(
+        callback.from_user.id
+    )
+
+    if not owner:
+        await callback.answer(
+            "Пользователь не найден.",
+            show_alert=True,
+        )
+        return
+
+    owner_offer = get_offer(
+        owner_offer_id
+    )
+
+    if not owner_offer:
+        await callback.answer(
+            "Ваше объявление больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    if owner_offer["user_id"] != owner["id"]:
+        await callback.answer(
+            "Ошибка доступа.",
+            show_alert=True,
+        )
+        return
+
+    liker_offer = get_offer(
+        liker_offer_id
+    )
+
+    if not liker_offer:
+        await callback.answer(
+            "Объявление пользователя больше недоступно.",
+            show_alert=True,
+        )
+        return
+
+    if liker_offer["user_id"] != liker_id:
+        await callback.answer(
+            "Ошибка данных.",
+            show_alert=True,
+        )
+        return
+
+    result = save_like(
+        from_user_id=owner["id"],
+        offer_id=liker_offer_id,
+        action="dislike",
+    )
+
+    if not result:
+        await callback.answer(
+            "Этот интерес уже обработан.",
+            show_alert=True,
+        )
+        return
+
+    try:
+        await callback.message.edit_reply_markup(
+            reply_markup=None
+        )
+    except Exception:
+        pass
+
+    await callback.message.answer(
+        "👎 <b>Не подходит.</b>\n\n"
+        "Контакт не раскрыт.",
+        reply_markup=main_menu_keyboard(),
+    )
+
+    await callback.answer(
+        "👎 Не подходит."
+    )
